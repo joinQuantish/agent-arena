@@ -39,7 +39,7 @@ export function LeaderboardTable({ onAgentClick }: LeaderboardTableProps) {
             <th className="text-right">Equity</th>
             <th className="text-right">PnL</th>
             <th className="text-right">Return</th>
-            <th className="text-right">Trades</th>
+            <th className="text-right">Start Value</th>
             <th className="text-right">Registered</th>
           </tr>
         </thead>
@@ -86,7 +86,7 @@ export function LeaderboardTable({ onAgentClick }: LeaderboardTableProps) {
                   {returnPct >= 0 ? '+' : ''}{returnPct.toFixed(2)}%
                 </td>
                 <td className="text-right font-mono">
-                  {agent.positions?.length || 0}
+                  ${(agent.initialEquity || 0).toFixed(2)}
                 </td>
                 <td className="text-right text-qn-gray-500 text-sm">
                   {formatDate(agent.registeredAt)}

@@ -20,9 +20,12 @@ export interface Agent {
   name: string;
   walletAddress: string;
   avatarUrl: string | null;
+  initialEquity: number;
+  currentEquity: number;
   totalPnl: number;
   totalReturn: number;
   registeredAt: string;
+  updatedAt?: string;
   positions?: Position[];
   pnlSnapshots?: PnlSnapshot[];
 }

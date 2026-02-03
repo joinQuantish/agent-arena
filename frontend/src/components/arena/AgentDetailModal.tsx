@@ -27,7 +27,6 @@ export function AgentDetailModal({ agent, onClose }: AgentDetailModalProps) {
   }, [agent.id]);
 
   const displayAgent = fullAgent || agent;
-  const positions = displayAgent.positions || [];
 
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -97,62 +96,42 @@ export function AgentDetailModal({ agent, onClose }: AgentDetailModalProps) {
           </div>
         </div>
 
-        {/* Positions */}
+        {/* Wallet Summary */}
         <div className="p-4">
           <h4 className="text-sm font-bold uppercase tracking-tight text-qn-gray-500 mb-3">
-            Positions ({positions.length})
+            Wallet Value
           </h4>
 
           {loading ? (
             <div className="flex justify-center py-8">
               <div className="spinner" />
             </div>
-          ) : positions.length === 0 ? (
-            <div className="text-center py-8">
-              <p className="text-qn-gray-500 font-mono text-sm">No positions yet</p>
-            </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="arena-table">
-                <thead>
-                  <tr>
-                    <th>Market</th>
-                    <th className="text-center">Side</th>
-                    <th className="text-right">Balance</th>
-                    <th className="text-right">Entry</th>
-                    <th className="text-right">Current</th>
-                    <th className="text-right">PnL</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {positions.map((position) => (
-                    <tr key={position.id}>
-                      <td>
-                        <span className="font-mono text-sm">{position.marketTicker}</span>
-                      </td>
-                      <td className="text-center">
-                        <span className={`badge ${position.side === 'YES' ? 'badge-yes' : 'badge-no'}`}>
-                          {position.side}
-                        </span>
-                      </td>
-                      <td className="text-right font-mono">
-                        {position.balance.toFixed(2)}
-                      </td>
-                      <td className="text-right font-mono">
-                        {(position.entryPrice * 100).toFixed(0)}¢
-                      </td>
-                      <td className="text-right font-mono">
-                        {(position.currentPrice * 100).toFixed(0)}¢
-                      </td>
-                      <td className={`text-right font-mono ${getPnlClass(position.pnl)}`}>
-                        {position.pnl >= 0 ? '+' : ''}${position.pnl.toFixed(2)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="p-4 border-2 border-qn-black bg-qn-gray-50">
+                <div className="text-xs text-qn-gray-500 font-mono uppercase">Starting Value</div>
+                <div className="text-2xl font-mono font-bold">
+                  ${(displayAgent.initialEquity || 0).toFixed(2)}
+                </div>
+                <div className="text-xs text-qn-gray-400 mt-1">
+                  When registered
+                </div>
+              </div>
+              <div className="p-4 border-2 border-qn-black bg-qn-gray-50">
+                <div className="text-xs text-qn-gray-500 font-mono uppercase">Current Value</div>
+                <div className="text-2xl font-mono font-bold">
+                  ${(displayAgent.currentEquity || displayAgent.pnlSnapshots?.[0]?.equity || 0).toFixed(2)}
+                </div>
+                <div className="text-xs text-qn-gray-400 mt-1">
+                  SOL + USDC
+                </div>
+              </div>
             </div>
           )}
+
+          <p className="text-xs text-qn-gray-400 mt-4 font-mono">
+            Wallet value = SOL balance × SOL price + USDC balance
+          </p>
         </div>
 
         {/* Footer */}
