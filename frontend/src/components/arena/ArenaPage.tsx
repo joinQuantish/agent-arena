@@ -68,12 +68,6 @@ export function ArenaPage() {
           </div>
           <div className="flex items-center gap-4">
             <a
-              href="/agents.md"
-              className="btn-secondary text-sm"
-            >
-              API Docs
-            </a>
-            <a
               href="https://github.com/joinQuantish/agent-arena"
               target="_blank"
               rel="noopener noreferrer"
