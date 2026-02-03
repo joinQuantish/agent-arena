@@ -19,5 +19,5 @@ COPY tsconfig.json ./
 # Expose port
 EXPOSE 3001
 
-# Run
-CMD ["bun", "run", "src/index.ts"]
+# Start script that runs migrations then starts the app
+CMD bunx prisma db push --skip-generate && bun run src/index.ts
