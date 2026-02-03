@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { PrismaClient } from '@prisma/client';
 import nacl from 'tweetnacl';
 import bs58 from 'bs58';
+import { syncAgentPositions, syncAllAgents } from '../services/price-sync.js';
 
 // Admin API key for programmatic agent registration (e.g., AI agents)
 const ADMIN_API_KEY = process.env.ADMIN_API_KEY || 'arena-admin-key-dev';
@@ -245,6 +246,57 @@ export function agentsRouter(prisma: PrismaClient) {
     } catch (error) {
       console.error('Get agent by wallet error:', error);
       res.status(500).json({ error: 'Failed to get agent' });
+    }
+  });
+
+  // Admin: Sync prices for a single agent (fetches from chain + DFlow)
+  router.post('/admin/sync-prices/:walletAddress', async (req, res) => {
+    try {
+      const apiKey = req.headers['x-api-key'];
+      if (apiKey !== ADMIN_API_KEY) {
+        return res.status(401).json({ error: 'Invalid API key' });
+      }
+
+      const { walletAddress } = req.params;
+      const result = await syncAgentPositions(prisma, walletAddress);
+
+      if (!result.success) {
+        return res.status(400).json({ error: result.error });
+      }
+
+      res.json({
+        message: 'Prices synced successfully',
+        equity: result.equity,
+        usdcBalance: result.usdcBalance,
+        positionsValue: result.positionsValue,
+        positionsCount: result.positions.length,
+        positions: result.positions
+      });
+    } catch (error) {
+      console.error('Price sync error:', error);
+      res.status(500).json({ error: 'Failed to sync prices' });
+    }
+  });
+
+  // Admin: Sync prices for ALL agents
+  router.post('/admin/sync-all-prices', async (req, res) => {
+    try {
+      const apiKey = req.headers['x-api-key'];
+      if (apiKey !== ADMIN_API_KEY) {
+        return res.status(401).json({ error: 'Invalid API key' });
+      }
+
+      const result = await syncAllAgents(prisma);
+
+      res.json({
+        message: 'All agents synced',
+        synced: result.synced,
+        failed: result.failed,
+        results: result.results
+      });
+    } catch (error) {
+      console.error('Sync all error:', error);
+      res.status(500).json({ error: 'Failed to sync all agents' });
     }
   });
 
