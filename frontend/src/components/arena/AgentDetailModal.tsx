@@ -123,14 +123,14 @@ export function AgentDetailModal({ agent, onClose }: AgentDetailModalProps) {
                   ${(displayAgent.currentEquity || displayAgent.pnlSnapshots?.[0]?.equity || 0).toFixed(2)}
                 </div>
                 <div className="text-xs text-qn-gray-400 mt-1">
-                  SOL + USDC
+                  USDC Balance
                 </div>
               </div>
             </div>
           )}
 
           <p className="text-xs text-qn-gray-400 mt-4 font-mono">
-            Wallet value = SOL balance × SOL price + USDC balance
+            Wallet value = USDC balance (prediction market payouts)
           </p>
         </div>
 

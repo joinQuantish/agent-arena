@@ -3,8 +3,7 @@ import { PrismaClient } from '@prisma/client';
 // Solana RPC endpoint
 const SOLANA_RPC = process.env.HELIUS_RPC_URL || process.env.SOLANA_RPC_URL || 'https://api.mainnet-beta.solana.com';
 
-// CoinGecko API for SOL price (free, no auth required)
-const COINGECKO_API = 'https://api.coingecko.com/api/v3/simple/price';
+// Note: Previously used CoinGecko for SOL price, now just tracking USDC
 
 // Known stablecoins (value = 1 USD)
 const STABLECOINS = new Set([
@@ -107,42 +106,13 @@ async function getTokenBalances(walletAddress: string): Promise<{ solBalance: nu
   }
 }
 
-// Cache SOL price to avoid rate limiting
-let cachedSolPrice = 100; // Fallback price
-let lastPriceFetch = 0;
-const PRICE_CACHE_MS = 60000; // Cache for 1 minute
-
-// Get SOL price from CoinGecko
-async function getSolPrice(): Promise<number> {
-  const now = Date.now();
-
-  // Return cached price if recent
-  if (now - lastPriceFetch < PRICE_CACHE_MS && cachedSolPrice > 0) {
-    return cachedSolPrice;
-  }
-
-  try {
-    const response = await fetch(`${COINGECKO_API}?ids=solana&vs_currencies=usd`);
-    const data = await response.json() as any;
-    const price = data?.solana?.usd;
-
-    if (price && price > 0) {
-      cachedSolPrice = price;
-      lastPriceFetch = now;
-      console.log(`[Price] SOL price updated: $${price}`);
-      return price;
-    }
-
-    console.log('[Price] CoinGecko returned no price, using cached:', cachedSolPrice);
-    return cachedSolPrice;
-  } catch (error) {
-    console.error('[Price] Error fetching SOL price, using cached:', cachedSolPrice, error);
-    return cachedSolPrice;
-  }
-}
+// Note: Simplified to just track USDC balance
+// Prediction market gains/losses are in USDC, so this is sufficient
+// Can add SOL price tracking later if needed
 
 // Calculate total wallet value in USD
-// Simple version: SOL + USDC only (prediction tokens ignored for now)
+// Simplified: Just track USDC/stablecoin balance
+// For prediction markets, gains/losses are in USDC anyway
 export async function calculateWalletValue(walletAddress: string): Promise<{
   totalValue: number;
   solBalance: number;
@@ -152,21 +122,11 @@ export async function calculateWalletValue(walletAddress: string): Promise<{
   breakdown: Array<{ mint: string; balance: number; price: number; value: number }>;
 }> {
   const { solBalance, tokens } = await getTokenBalances(walletAddress);
-  const solPrice = await getSolPrice();
 
-  console.log(`[Wallet] ${walletAddress}: SOL balance=${solBalance}, SOL price=$${solPrice}, tokens=${tokens.length}`);
-
-  // Calculate values
+  // Calculate stablecoin balances
   let usdcBalance = 0;
   const breakdown: Array<{ mint: string; balance: number; price: number; value: number }> = [];
 
-  // SOL value
-  const solValue = solBalance * solPrice;
-  if (solBalance > 0) {
-    breakdown.push({ mint: 'SOL', balance: solBalance, price: solPrice, value: solValue });
-  }
-
-  // USDC/stablecoin values
   for (const token of tokens) {
     if (STABLECOINS.has(token.mint)) {
       usdcBalance += token.balance;
@@ -177,18 +137,20 @@ export async function calculateWalletValue(walletAddress: string): Promise<{
         value: token.balance
       });
     }
-    // Note: Prediction market tokens and other tokens are ignored for now
-    // They're too hard to price reliably without a dedicated API
   }
 
-  const totalValue = solValue + usdcBalance;
+  console.log(`[Wallet] ${walletAddress}: USDC=$${usdcBalance.toFixed(2)}, SOL=${solBalance.toFixed(4)} (not included in value)`);
+
+  // For simplicity, wallet value = USDC balance only
+  // This makes tracking prediction market PnL straightforward
+  const totalValue = usdcBalance;
 
   return {
     totalValue,
     solBalance,
-    solValue,
+    solValue: 0, // Not tracking SOL value for now
     usdcBalance,
-    otherTokensValue: 0, // Not tracking other tokens for now
+    otherTokensValue: 0,
     breakdown
   };
 }
