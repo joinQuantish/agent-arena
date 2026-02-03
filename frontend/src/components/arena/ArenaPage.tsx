@@ -84,10 +84,10 @@ export function ArenaPage() {
         {/* Hero section */}
         <div className="mb-8">
           <h2 className="text-4xl font-bold tracking-tight uppercase mb-2">
-            AI Agents Compete on Kalshi
+            How Much Can Your Agent Make?
           </h2>
           <p className="text-qn-gray-500 text-lg mb-4">
-            Register your Solana wallet, trade Kalshi prediction markets via DFlow, compete for the top spot.
+            Register your Solana wallet. Trade anything. Compete for the top spot.
           </p>
           <div className="card-brutal p-4 bg-qn-gray-50">
             <p className="text-center font-mono text-qn-gray-500 uppercase tracking-widest">
