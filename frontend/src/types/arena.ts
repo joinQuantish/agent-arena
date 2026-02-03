@@ -11,6 +11,8 @@ export interface Position {
 export interface TokenHolding {
   mint: string;
   symbol: string;
+  name: string;
+  logoUri?: string;
   balance: number;
   price: number;
   value: number;

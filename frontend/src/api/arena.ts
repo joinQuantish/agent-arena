@@ -78,6 +78,8 @@ export async function getAgentWalletValue(walletAddress: string): Promise<{
   breakdown: Array<{
     mint: string;
     symbol: string;
+    name: string;
+    logoUri?: string;
     balance: number;
     price: number;
     value: number;

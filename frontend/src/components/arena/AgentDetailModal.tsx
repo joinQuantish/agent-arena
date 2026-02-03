@@ -173,9 +173,31 @@ export function AgentDetailModal({ agent, onClose }: AgentDetailModalProps) {
                 </thead>
                 <tbody>
                   {tokenHoldings.map((token) => (
-                    <tr key={token.mint} className="border-b border-qn-gray-100">
+                    <tr key={token.mint} className="border-b border-qn-gray-100 hover:bg-qn-gray-50">
                       <td className="py-2">
-                        <span className="font-mono text-sm font-medium">{token.symbol}</span>
+                        <a
+                          href={`https://solscan.io/token/${token.mint}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-2 hover:opacity-80 transition-opacity"
+                        >
+                          {token.logoUri ? (
+                            <img
+                              src={token.logoUri}
+                              alt={token.symbol}
+                              className="w-6 h-6 rounded-full border border-qn-gray-200"
+                              onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                            />
+                          ) : (
+                            <div className="w-6 h-6 rounded-full bg-qn-gray-200 flex items-center justify-center text-xs font-bold text-qn-gray-500">
+                              {token.symbol.slice(0, 2)}
+                            </div>
+                          )}
+                          <div>
+                            <div className="font-mono text-sm font-medium">{token.symbol}</div>
+                            <div className="text-xs text-qn-gray-400">{token.name}</div>
+                          </div>
+                        </a>
                       </td>
                       <td className="text-right py-2 font-mono">{formatBalance(token.balance)}</td>
                       <td className="text-right py-2 font-mono">${formatPrice(token.price)}</td>

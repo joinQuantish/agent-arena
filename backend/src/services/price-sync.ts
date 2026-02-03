@@ -27,9 +27,83 @@ interface TokenBalance {
 export interface TokenHolding {
   mint: string;
   symbol: string;
+  name: string;
+  logoUri?: string;
   balance: number;
   price: number;
   value: number;
+}
+
+// Cache for token metadata to avoid repeated lookups
+const tokenMetadataCache = new Map<string, { symbol: string; name: string; logoUri?: string }>();
+
+// Well-known tokens (fallback if metadata lookup fails)
+const KNOWN_TOKENS: Record<string, { symbol: string; name: string; logoUri?: string }> = {
+  'So11111111111111111111111111111111111111112': { symbol: 'SOL', name: 'Solana', logoUri: 'https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/So11111111111111111111111111111111111111112/logo.png' },
+  'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v': { symbol: 'USDC', name: 'USD Coin', logoUri: 'https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v/logo.png' },
+  'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB': { symbol: 'USDT', name: 'Tether USD', logoUri: 'https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB/logo.png' },
+  'USDH1SM1ojwWUga67PGrgFWUHibbjqMvuMaDkRJTgkX': { symbol: 'USDH', name: 'USDH', logoUri: 'https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/USDH1SM1ojwWUga67PGrgFWUHibbjqMvuMaDkRJTgkX/usdh.svg' },
+};
+
+// Fetch token metadata using Helius DAS API or Metaplex
+async function getTokenMetadata(mint: string): Promise<{ symbol: string; name: string; logoUri?: string }> {
+  // Check cache first
+  if (tokenMetadataCache.has(mint)) {
+    return tokenMetadataCache.get(mint)!;
+  }
+
+  // Check known tokens
+  if (KNOWN_TOKENS[mint]) {
+    tokenMetadataCache.set(mint, KNOWN_TOKENS[mint]);
+    return KNOWN_TOKENS[mint];
+  }
+
+  try {
+    // Try Helius DAS API (getAsset)
+    const response = await fetch(SOLANA_RPC, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: 'token-metadata',
+        method: 'getAsset',
+        params: { id: mint }
+      })
+    });
+
+    const data = await response.json() as any;
+
+    if (data.result?.content?.metadata) {
+      const metadata = data.result.content.metadata;
+      const result = {
+        symbol: metadata.symbol || mint.slice(0, 4) + '...',
+        name: metadata.name || 'Unknown Token',
+        logoUri: data.result.content?.links?.image || data.result.content?.files?.[0]?.uri
+      };
+      tokenMetadataCache.set(mint, result);
+      console.log(`[Metadata] ${mint}: ${result.symbol} (${result.name})`);
+      return result;
+    }
+
+    // If DAS fails, try to parse on-chain metadata via Metaplex
+    // The metadata PDA is derived from: ['metadata', METADATA_PROGRAM_ID, mint]
+    // For now, fall back to truncated mint
+    const fallback = {
+      symbol: mint.slice(0, 4) + '...' + mint.slice(-4),
+      name: 'Unknown Token'
+    };
+    tokenMetadataCache.set(mint, fallback);
+    return fallback;
+
+  } catch (error) {
+    console.warn(`Failed to fetch metadata for ${mint}:`, error);
+    const fallback = {
+      symbol: mint.slice(0, 4) + '...' + mint.slice(-4),
+      name: 'Unknown Token'
+    };
+    tokenMetadataCache.set(mint, fallback);
+    return fallback;
+  }
 }
 
 // Get USD value for a token via Jupiter Quote API
@@ -182,11 +256,14 @@ export async function calculateWalletValue(walletAddress: string): Promise<{
   if (solBalance > 0.001) { // Skip dust
     const { usdValue, price } = await getTokenUsdValue(SOL_MINT, solBalance, 9);
     if (usdValue > 0.01) {
+      const metadata = await getTokenMetadata(SOL_MINT);
       totalValue += usdValue;
       otherTokensValue += usdValue;
       breakdown.push({
         mint: SOL_MINT,
-        symbol: 'SOL',
+        symbol: metadata.symbol,
+        name: metadata.name,
+        logoUri: metadata.logoUri,
         balance: solBalance,
         price,
         value: usdValue
@@ -198,13 +275,18 @@ export async function calculateWalletValue(walletAddress: string): Promise<{
 
   // 2. Value each SPL token
   for (const token of tokens) {
+    // Fetch metadata for all tokens
+    const metadata = await getTokenMetadata(token.mint);
+
     if (STABLECOINS.has(token.mint)) {
       // Stablecoins = $1
       usdcBalance += token.balance;
       totalValue += token.balance;
       breakdown.push({
         mint: token.mint,
-        symbol: 'USDC',
+        symbol: metadata.symbol,
+        name: metadata.name,
+        logoUri: metadata.logoUri,
         balance: token.balance,
         price: 1,
         value: token.balance
@@ -217,7 +299,9 @@ export async function calculateWalletValue(walletAddress: string): Promise<{
         otherTokensValue += usdValue;
         breakdown.push({
           mint: token.mint,
-          symbol: token.mint.slice(0, 4) + '...' + token.mint.slice(-4), // Truncated mint as symbol
+          symbol: metadata.symbol,
+          name: metadata.name,
+          logoUri: metadata.logoUri,
           balance: token.balance,
           price,
           value: usdValue
