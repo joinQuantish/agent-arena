@@ -3,8 +3,9 @@ import { PrismaClient } from '@prisma/client';
 // Solana RPC endpoint
 const SOLANA_RPC = process.env.HELIUS_RPC_URL || process.env.SOLANA_RPC_URL || 'https://api.mainnet-beta.solana.com';
 
-// Jupiter Quote API for token pricing
-const JUPITER_QUOTE_API = 'https://api.jup.ag/swap/v1/quote';
+// Jupiter Quote API for token pricing (public endpoint)
+// Note: public.jupiterapi.com has a 0.2% platform fee but is free to use
+const JUPITER_QUOTE_API = 'https://public.jupiterapi.com/quote';
 
 // Token mints
 const USDC_MINT = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v';
