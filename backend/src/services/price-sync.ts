@@ -245,41 +245,62 @@ export async function syncAgentPositions(prisma: PrismaClient, walletAddress: st
     const equity = usdcBalance + positionsValue;
     console.log(`Agent ${agent.name}: USDC=$${usdcBalance.toFixed(2)}, Positions=$${positionsValue.toFixed(2)}, Total=$${equity.toFixed(2)}`);
 
-    // Build map of existing positions to preserve entry prices
+    // Build map of existing positions to preserve entry prices and mappings
     const existingPositions = await prisma.position.findMany({
       where: { agentId: agent.id }
     });
-    const existingByMint: Record<string, { costBasis: number }> = {};
+    const existingByMint: Record<string, { costBasis: number; marketTicker: string; outcome: string }> = {};
     for (const pos of existingPositions) {
-      existingByMint[pos.outcomeMint] = { costBasis: pos.costBasis };
+      existingByMint[pos.outcomeMint] = {
+        costBasis: pos.costBasis,
+        marketTicker: pos.marketTicker,
+        outcome: pos.outcome
+      };
     }
 
-    // Delete old positions
-    await prisma.position.deleteMany({
-      where: { agentId: agent.id }
-    });
-
-    // Create updated positions, preserving entry prices
-    if (positions.length > 0) {
-      await prisma.position.createMany({
-        data: positions.map(p => {
-          // Preserve existing costBasis, or use current price for new positions
-          const existing = existingByMint[p.outcomeMint];
-          const costBasis = existing?.costBasis || p.currentPrice;
-          const pnl = (p.currentPrice - costBasis) * p.balance;
-
-          return {
-            agentId: agent.id,
-            marketTicker: p.marketTicker,
-            outcomeMint: p.outcomeMint,
-            outcome: p.outcome,
-            balance: p.balance,
-            costBasis,
-            currentPrice: p.currentPrice,
-            pnl
-          };
-        })
+    // If we found on-chain positions, update the database
+    // If we found NO positions but have existing ones, keep them (might be RPC issue)
+    if (positions.length > 0 || existingPositions.length === 0) {
+      // Delete old positions
+      await prisma.position.deleteMany({
+        where: { agentId: agent.id }
       });
+
+      // Create updated positions, preserving entry prices
+      if (positions.length > 0) {
+        await prisma.position.createMany({
+          data: positions.map(p => {
+            // Preserve existing costBasis, or use current price for new positions
+            const existing = existingByMint[p.outcomeMint];
+            const costBasis = existing?.costBasis || p.currentPrice;
+            const pnl = (p.currentPrice - costBasis) * p.balance;
+
+            return {
+              agentId: agent.id,
+              marketTicker: p.marketTicker,
+              outcomeMint: p.outcomeMint,
+              outcome: p.outcome,
+              balance: p.balance,
+              costBasis,
+              currentPrice: p.currentPrice,
+              pnl
+            };
+          })
+        });
+      }
+    } else {
+      console.log(`Skipping position update for ${agent.name}: no positions detected but ${existingPositions.length} exist in DB`);
+      // Use existing positions for calculations
+      for (const pos of existingPositions) {
+        positions.push({
+          marketTicker: pos.marketTicker,
+          outcomeMint: pos.outcomeMint,
+          outcome: pos.outcome as 'YES' | 'NO',
+          balance: pos.balance,
+          currentPrice: pos.currentPrice,
+          marketValue: pos.balance * pos.currentPrice
+        });
+      }
     }
 
     // Calculate total PnL from positions
