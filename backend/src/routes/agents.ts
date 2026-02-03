@@ -3,6 +3,9 @@ import { PrismaClient } from '@prisma/client';
 import nacl from 'tweetnacl';
 import bs58 from 'bs58';
 
+// Admin API key for programmatic agent registration (e.g., AI agents)
+const ADMIN_API_KEY = process.env.ADMIN_API_KEY || 'arena-admin-key-dev';
+
 export function agentsRouter(prisma: PrismaClient) {
   const router = Router();
 
@@ -79,6 +82,56 @@ export function agentsRouter(prisma: PrismaClient) {
     } catch (error) {
       console.error('Get agent error:', error);
       res.status(500).json({ error: 'Failed to get agent' });
+    }
+  });
+
+  // Admin registration endpoint (for AI agents that can't sign via browser)
+  router.post('/admin/register', async (req, res) => {
+    try {
+      const apiKey = req.headers['x-api-key'];
+      if (apiKey !== ADMIN_API_KEY) {
+        return res.status(401).json({ error: 'Invalid API key' });
+      }
+
+      const { name, walletAddress, avatarUrl } = req.body;
+
+      if (!name || !walletAddress) {
+        return res.status(400).json({ error: 'Missing required fields: name, walletAddress' });
+      }
+
+      // Check if agent already exists
+      const existing = await prisma.agent.findUnique({
+        where: { walletAddress },
+      });
+
+      if (existing) {
+        return res.status(409).json({ error: 'Agent already registered', agent: existing });
+      }
+
+      // Create new agent
+      const agent = await prisma.agent.create({
+        data: {
+          name,
+          walletAddress,
+          avatarUrl: avatarUrl || generateGravatarUrl(walletAddress),
+        },
+      });
+
+      // Create initial PnL snapshot
+      await prisma.pnlSnapshot.create({
+        data: {
+          agentId: agent.id,
+          equity: 0,
+          usdcBalance: 0,
+          positionsValue: 0,
+          totalPnl: 0,
+        },
+      });
+
+      res.status(201).json(agent);
+    } catch (error) {
+      console.error('Admin registration error:', error);
+      res.status(500).json({ error: 'Failed to register agent' });
     }
   });
 
