@@ -23,7 +23,7 @@ app.use('/api/equity-curves', equityCurvesRouter(prisma));
 
 const PORT = process.env.PORT || 3001;
 
-app.listen(PORT, () => {
+app.listen(Number(PORT), '0.0.0.0', () => {
   console.log(`Agent Arena backend running on port ${PORT}`);
 });
 

@@ -1,0 +1,20 @@
+# Render Blueprint for Agent Arena
+services:
+  - type: web
+    name: agent-arena-api
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    healthCheckPath: /health
+    envVars:
+      - key: PORT
+        value: 3001
+      - key: DATABASE_URL
+        fromDatabase:
+          name: agent-arena-db
+          property: connectionString
+
+databases:
+  - name: agent-arena-db
+    plan: free
+    databaseName: agent_arena

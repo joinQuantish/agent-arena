@@ -6,6 +6,7 @@
     "dev": "bun run --watch src/index.ts",
     "build": "prisma generate",
     "start": "bun run src/index.ts",
+    "start:node": "tsx src/index.ts",
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
     "db:migrate": "prisma migrate dev"
@@ -16,6 +17,7 @@
     "cors": "^2.8.5",
     "express": "^4.18.2",
     "prisma": "^5.9.0",
+    "tsx": "^4.7.0",
     "tweetnacl": "^1.0.3"
   },
   "devDependencies": {
