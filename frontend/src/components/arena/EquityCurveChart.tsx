@@ -34,7 +34,6 @@ export function EquityCurveChart({ onAgentClick, selectedAgentId }: EquityCurveC
   const seriesMapRef = useRef<Map<string, { series: ISeriesApi<'Line'>; agent: EquityCurveAgent; color: string }>>(new Map());
   const { equityCurves, loading } = useArenaStore();
   const [hoveredAgent, setHoveredAgent] = useState<string | null>(null);
-  const [tooltipData, setTooltipData] = useState<{ name: string; value: number; time: string } | null>(null);
 
   useEffect(() => {
     if (!chartContainerRef.current) return;
