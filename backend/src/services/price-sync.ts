@@ -3,8 +3,8 @@ import { PrismaClient } from '@prisma/client';
 // Solana RPC endpoint
 const SOLANA_RPC = process.env.HELIUS_RPC_URL || process.env.SOLANA_RPC_URL || 'https://api.mainnet-beta.solana.com';
 
-// Jupiter Price API (free, no auth required)
-const JUPITER_PRICE_API = 'https://api.jup.ag/price/v2';
+// CoinGecko API for SOL price (free, no auth required)
+const COINGECKO_API = 'https://api.coingecko.com/api/v3/simple/price';
 
 // Known stablecoins (value = 1 USD)
 const STABLECOINS = new Set([
@@ -13,18 +13,10 @@ const STABLECOINS = new Set([
   'USDH1SM1ojwWUga67PGrgFWUHibbjqMvuMaDkRJTgkX',  // USDH
 ]);
 
-// SOL mint address (wrapped SOL)
-const SOL_MINT = 'So11111111111111111111111111111111111111112';
-
 interface TokenBalance {
   mint: string;
   balance: number;
   decimals: number;
-}
-
-interface TokenPrice {
-  mint: string;
-  price: number;
 }
 
 // Fetch all token balances for a wallet
@@ -115,33 +107,20 @@ async function getTokenBalances(walletAddress: string): Promise<{ solBalance: nu
   }
 }
 
-// Get token prices from Jupiter
-async function getTokenPrices(mints: string[]): Promise<Map<string, number>> {
-  const prices = new Map<string, number>();
-
-  if (mints.length === 0) return prices;
-
+// Get SOL price from CoinGecko
+async function getSolPrice(): Promise<number> {
   try {
-    // Jupiter price API accepts comma-separated mints
-    const response = await fetch(`${JUPITER_PRICE_API}?ids=${mints.join(',')}`);
+    const response = await fetch(`${COINGECKO_API}?ids=solana&vs_currencies=usd`);
     const data = await response.json() as any;
-
-    if (data.data) {
-      for (const [mint, info] of Object.entries(data.data)) {
-        const priceInfo = info as any;
-        if (priceInfo?.price) {
-          prices.set(mint, parseFloat(priceInfo.price));
-        }
-      }
-    }
+    return data?.solana?.usd || 0;
   } catch (error) {
-    console.error('Error fetching Jupiter prices:', error);
+    console.error('Error fetching SOL price:', error);
+    return 0;
   }
-
-  return prices;
 }
 
 // Calculate total wallet value in USD
+// Simple version: SOL + USDC only (prediction tokens ignored for now)
 export async function calculateWalletValue(walletAddress: string): Promise<{
   totalValue: number;
   solBalance: number;
@@ -151,67 +130,41 @@ export async function calculateWalletValue(walletAddress: string): Promise<{
   breakdown: Array<{ mint: string; balance: number; price: number; value: number }>;
 }> {
   const { solBalance, tokens } = await getTokenBalances(walletAddress);
-
-  // Collect all non-stablecoin mints to price (plus SOL)
-  const mintsToPrice = [SOL_MINT];
-  for (const token of tokens) {
-    if (!STABLECOINS.has(token.mint)) {
-      mintsToPrice.push(token.mint);
-    }
-  }
-
-  // Get prices from Jupiter
-  const prices = await getTokenPrices(mintsToPrice);
-  const solPrice = prices.get(SOL_MINT) || 0;
+  const solPrice = await getSolPrice();
 
   // Calculate values
-  let totalValue = 0;
   let usdcBalance = 0;
-  let otherTokensValue = 0;
   const breakdown: Array<{ mint: string; balance: number; price: number; value: number }> = [];
 
   // SOL value
   const solValue = solBalance * solPrice;
-  totalValue += solValue;
   if (solBalance > 0) {
     breakdown.push({ mint: 'SOL', balance: solBalance, price: solPrice, value: solValue });
   }
 
-  // Token values
+  // USDC/stablecoin values
   for (const token of tokens) {
-    let value = 0;
-    let price = 0;
-
     if (STABLECOINS.has(token.mint)) {
-      // Stablecoins = $1
-      price = 1;
-      value = token.balance;
       usdcBalance += token.balance;
-    } else {
-      // Get price from Jupiter
-      price = prices.get(token.mint) || 0;
-      value = token.balance * price;
-      otherTokensValue += value;
-    }
-
-    totalValue += value;
-
-    if (value > 0.01) { // Only track tokens worth > 1 cent
       breakdown.push({
         mint: token.mint,
         balance: token.balance,
-        price,
-        value
+        price: 1,
+        value: token.balance
       });
     }
+    // Note: Prediction market tokens and other tokens are ignored for now
+    // They're too hard to price reliably without a dedicated API
   }
+
+  const totalValue = solValue + usdcBalance;
 
   return {
     totalValue,
     solBalance,
     solValue,
     usdcBalance,
-    otherTokensValue,
+    otherTokensValue: 0, // Not tracking other tokens for now
     breakdown
   };
 }
