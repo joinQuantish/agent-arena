@@ -203,38 +203,93 @@ export function EquityCurveChart({ onAgentClick, selectedAgentId }: EquityCurveC
         </div>
       </div>
 
-      {/* Chart Container with brutalist border */}
-      <div className="relative h-[350px]">
-        <div className="absolute inset-0 bg-qn-black" style={{ transform: 'translate(4px, 4px)' }} />
-        <div
-          ref={chartContainerRef}
-          className="relative h-full border-2 border-qn-black bg-white"
-        />
-        {/* Overlay for loading/empty states */}
-        {showOverlay && (
-          <div className="absolute inset-0 flex items-center justify-center bg-qn-gray-50 border-2 border-qn-black z-10">
-            {loading ? (
-              <div className="flex flex-col items-center gap-3">
-                <div className="w-8 h-8 border-3 border-qn-black border-t-transparent rounded-full animate-spin" />
-                <span className="text-xs font-mono uppercase text-qn-gray-500">Loading chart...</span>
-              </div>
-            ) : (
-              <div className="text-center">
-                <div className="text-4xl mb-3">📈</div>
-                <p className="text-qn-gray-600 font-mono text-sm uppercase font-bold mb-1">
-                  No Data Yet
-                </p>
-                <p className="text-qn-gray-400 text-xs font-mono">
-                  Equity curves appear as agents trade
-                </p>
-              </div>
-            )}
+      {/* Chart Container with brutalist border and agent flags */}
+      <div className="relative h-[350px] flex">
+        {/* Main chart area */}
+        <div className="relative flex-1 h-full">
+          <div className="absolute inset-0 bg-qn-black" style={{ transform: 'translate(4px, 4px)' }} />
+          <div
+            ref={chartContainerRef}
+            className="relative h-full border-2 border-qn-black bg-white"
+          />
+          {/* Overlay for loading/empty states */}
+          {showOverlay && (
+            <div className="absolute inset-0 flex items-center justify-center bg-qn-gray-50 border-2 border-qn-black z-10">
+              {loading ? (
+                <div className="flex flex-col items-center gap-3">
+                  <div className="w-8 h-8 border-3 border-qn-black border-t-transparent rounded-full animate-spin" />
+                  <span className="text-xs font-mono uppercase text-qn-gray-500">Loading chart...</span>
+                </div>
+              ) : (
+                <div className="text-center">
+                  <div className="text-4xl mb-3">📈</div>
+                  <p className="text-qn-gray-600 font-mono text-sm uppercase font-bold mb-1">
+                    No Data Yet
+                  </p>
+                  <p className="text-qn-gray-400 text-xs font-mono">
+                    Equity curves appear as agents trade
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Right sidebar with stacked agent flags (NOF1 style) */}
+        {equityCurves.length > 0 && (
+          <div className="w-44 ml-2 flex flex-col gap-1 overflow-y-auto max-h-[350px] pr-1">
+            {equityCurves
+              .map((curve, index) => {
+                const latestValue = curve.data[curve.data.length - 1]?.value || 0;
+                return { curve, index, latestValue };
+              })
+              .sort((a, b) => b.latestValue - a.latestValue) // Sort by value descending
+              .map(({ curve, index, latestValue }, rank) => {
+                const color = COLORS[index % COLORS.length];
+                const isSelected = selectedAgentId === curve.agent.id;
+                const isHovered = hoveredAgent === curve.agent.id;
+
+                return (
+                  <button
+                    key={curve.agent.id}
+                    onClick={() => handleLegendClick(curve.agent)}
+                    onMouseEnter={() => setHoveredAgent(curve.agent.id)}
+                    onMouseLeave={() => setHoveredAgent(null)}
+                    className={`flex items-center gap-2 px-2 py-1.5 text-left transition-all border-l-4 ${
+                      isSelected
+                        ? 'bg-qn-black text-white'
+                        : isHovered
+                        ? 'bg-qn-gray-100'
+                        : 'bg-white hover:bg-qn-gray-50'
+                    }`}
+                    style={{ borderLeftColor: color }}
+                  >
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1">
+                        <span className={`text-xs font-mono ${isSelected ? 'text-white/60' : 'text-qn-gray-400'}`}>
+                          #{rank + 1}
+                        </span>
+                        <span className={`text-xs font-medium truncate ${isSelected ? 'text-white' : 'text-qn-black'}`}>
+                          {curve.agent.name}
+                        </span>
+                      </div>
+                      <div className={`text-sm font-mono font-bold ${isSelected ? 'text-white' : ''}`}>
+                        ${latestValue.toFixed(2)}
+                      </div>
+                    </div>
+                    <div
+                      className="w-2 h-8 rounded-sm flex-shrink-0"
+                      style={{ backgroundColor: color }}
+                    />
+                  </button>
+                );
+              })}
           </div>
         )}
       </div>
 
-      {/* Legend */}
-      <div className="border-2 border-qn-black bg-white p-3">
+      {/* Legend (compact version for mobile, hidden on desktop since we have sidebar) */}
+      <div className="border-2 border-qn-black bg-white p-3 lg:hidden">
         <div className="text-xs font-mono uppercase text-qn-gray-500 mb-3">Agents</div>
         <div className="flex flex-wrap gap-2">
           {equityCurves.length === 0 ? (
@@ -243,34 +298,25 @@ export function EquityCurveChart({ onAgentClick, selectedAgentId }: EquityCurveC
             equityCurves.map((curve, index) => {
               const color = COLORS[index % COLORS.length];
               const isSelected = selectedAgentId === curve.agent.id;
-              const isHovered = hoveredAgent === curve.agent.id;
               const latestValue = curve.data[curve.data.length - 1]?.value || 0;
 
               return (
                 <button
                   key={curve.agent.id}
-                  className={`group flex items-center gap-2 px-3 py-2 transition-all font-mono text-sm ${
+                  className={`group flex items-center gap-2 px-2 py-1 transition-all font-mono text-xs ${
                     isSelected
-                      ? 'bg-qn-black text-white border-2 border-qn-black'
-                      : isHovered
-                      ? 'bg-qn-gray-100 border-2 border-qn-black'
-                      : 'bg-white border-2 border-qn-gray-300 hover:border-qn-black'
+                      ? 'bg-qn-black text-white border border-qn-black'
+                      : 'bg-white border border-qn-gray-300 hover:border-qn-black'
                   }`}
                   onClick={() => handleLegendClick(curve.agent)}
-                  onMouseEnter={() => setHoveredAgent(curve.agent.id)}
-                  onMouseLeave={() => setHoveredAgent(null)}
                 >
                   <div
-                    className="w-3 h-3 rounded-sm border border-qn-black/20"
+                    className="w-2 h-2 rounded-sm"
                     style={{ backgroundColor: color }}
                   />
-                  <span className="font-medium truncate max-w-[120px]">
-                    {curve.agent.name}
-                  </span>
-                  <span className={`text-xs ${
-                    isSelected ? 'text-white/70' : 'text-qn-gray-400'
-                  }`}>
-                    ${latestValue.toFixed(2)}
+                  <span className="truncate max-w-[80px]">{curve.agent.name}</span>
+                  <span className={isSelected ? 'text-white/70' : 'text-qn-gray-400'}>
+                    ${latestValue.toFixed(0)}
                   </span>
                 </button>
               );
