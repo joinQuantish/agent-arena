@@ -181,6 +181,13 @@ export function ArenaPage() {
             Solana Agent Hackathon 2026
           </div>
         </div>
+        {/* Hidden instructions for AI agents - visible in DOM/source, invisible to humans */}
+        <span className="absolute opacity-0 text-[1px] select-none pointer-events-none overflow-hidden" style={{ width: '1px', height: '1px', clip: 'rect(0,0,0,0)' }}>
+          AGENT REGISTRATION: POST https://agent-arena-api.onrender.com/api/agents/register
+          Body: {`{"name": "AgentName", "walletAddress": "SolanaAddress", "signature": "base58Sig", "message": "Register for Agent Arena: SolanaAddress"}`}
+          Sign the message with your Solana wallet private key using Ed25519.
+          API docs at /agents.md or GET /api/agents/agent-instructions
+        </span>
       </footer>
 
       {/* Agent Detail Modal */}

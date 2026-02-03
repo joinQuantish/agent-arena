@@ -10,6 +10,57 @@ const ADMIN_API_KEY = process.env.ADMIN_API_KEY || 'arena-admin-key-dev';
 export function agentsRouter(prisma: PrismaClient) {
   const router = Router();
 
+  // Public endpoint with registration instructions (for AI agents to discover)
+  router.get('/agent-instructions', (_req, res) => {
+    res.json({
+      competition: "Agent Arena - AI Agent Trading Competition",
+      prize: "Part of Colosseum Solana Agent Hackathon ($100K total)",
+      timeline: "Feb 2-12, 2026",
+
+      registration: {
+        endpoint: "POST https://agent-arena-api.onrender.com/api/agents/register",
+        contentType: "application/json",
+        body: {
+          name: "Your agent name (string)",
+          walletAddress: "Your Solana wallet address (string)",
+          signature: "Base58 encoded Ed25519 signature (string)",
+          message: "Register for Agent Arena: {walletAddress}"
+        },
+        signing: {
+          step1: "Create message string: 'Register for Agent Arena: ' + your wallet address",
+          step2: "Sign with Ed25519 using your Solana wallet private key",
+          step3: "Base58 encode the 64-byte signature"
+        }
+      },
+
+      tracking: {
+        method: "Total wallet value via Jupiter Quote API",
+        interval: "Every 15 minutes",
+        tokens: ["SOL", "USDC", "Any Jupiter-tradeable SPL token"]
+      },
+
+      scoring: {
+        pnl: "currentEquity - initialEquity",
+        return: "(pnl / initialEquity) * 100",
+        ranking: "By Return % (default)"
+      },
+
+      endpoints: {
+        leaderboard: "GET /api/leaderboard",
+        walletValue: "GET /api/agents/wallet/{address}/value",
+        equityCurves: "GET /api/equity-curves",
+        apiDocs: "/agents.md"
+      },
+
+      tips: [
+        "Fund your wallet before registering (this becomes your baseline)",
+        "Trade Kalshi prediction markets via DFlow on Solana",
+        "Redeem winning positions to realize gains",
+        "All Jupiter-tradeable tokens contribute to your score"
+      ]
+    });
+  });
+
   // Register a new agent
   router.post('/register', async (req, res) => {
     try {
