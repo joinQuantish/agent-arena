@@ -245,35 +245,59 @@ export async function syncAgentPositions(prisma: PrismaClient, walletAddress: st
     const equity = usdcBalance + positionsValue;
     console.log(`Agent ${agent.name}: USDC=$${usdcBalance.toFixed(2)}, Positions=$${positionsValue.toFixed(2)}, Total=$${equity.toFixed(2)}`);
 
-    // Update positions in database
+    // Build map of existing positions to preserve entry prices
+    const existingPositions = await prisma.position.findMany({
+      where: { agentId: agent.id }
+    });
+    const existingByMint: Record<string, { costBasis: number }> = {};
+    for (const pos of existingPositions) {
+      existingByMint[pos.outcomeMint] = { costBasis: pos.costBasis };
+    }
+
+    // Delete old positions
     await prisma.position.deleteMany({
       where: { agentId: agent.id }
     });
 
+    // Create updated positions, preserving entry prices
     if (positions.length > 0) {
       await prisma.position.createMany({
-        data: positions.map(p => ({
-          agentId: agent.id,
-          marketTicker: p.marketTicker,
-          outcomeMint: p.outcomeMint,
-          outcome: p.outcome,
-          balance: p.balance,
-          costBasis: p.currentPrice, // Use current as cost if we don't have historical
-          currentPrice: p.currentPrice,
-          pnl: 0
-        }))
+        data: positions.map(p => {
+          // Preserve existing costBasis, or use current price for new positions
+          const existing = existingByMint[p.outcomeMint];
+          const costBasis = existing?.costBasis || p.currentPrice;
+          const pnl = (p.currentPrice - costBasis) * p.balance;
+
+          return {
+            agentId: agent.id,
+            marketTicker: p.marketTicker,
+            outcomeMint: p.outcomeMint,
+            outcome: p.outcome,
+            balance: p.balance,
+            costBasis,
+            currentPrice: p.currentPrice,
+            pnl
+          };
+        })
       });
     }
 
-    // Get first snapshot as baseline for PnL
-    const firstSnapshot = await prisma.pnlSnapshot.findFirst({
-      where: { agentId: agent.id },
-      orderBy: { timestamp: 'asc' }
-    });
+    // Calculate total PnL from positions
+    const totalPositionPnl = positions.reduce((sum, p) => {
+      const existing = existingByMint[p.outcomeMint];
+      const costBasis = existing?.costBasis || p.currentPrice;
+      return sum + (p.currentPrice - costBasis) * p.balance;
+    }, 0);
 
-    const baselineEquity = firstSnapshot?.equity || equity;
-    const totalPnl = equity - baselineEquity;
-    const totalReturn = baselineEquity > 0 ? (totalPnl / baselineEquity) * 100 : 0;
+    // Total cost basis for return calculation
+    const totalCostBasis = positions.reduce((sum, p) => {
+      const existing = existingByMint[p.outcomeMint];
+      const costBasis = existing?.costBasis || p.currentPrice;
+      return sum + costBasis * p.balance;
+    }, 0);
+
+    const totalPnl = totalPositionPnl;
+    const totalReturn = totalCostBasis > 0 ? (totalPnl / totalCostBasis) * 100 : 0;
 
     // Create new snapshot
     await prisma.pnlSnapshot.create({

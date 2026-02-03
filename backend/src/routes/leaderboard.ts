@@ -38,7 +38,10 @@ export function leaderboardRouter(prisma: PrismaClient) {
           positions: {
             select: {
               marketTicker: true,
+              outcome: true,
               balance: true,
+              costBasis: true,
+              currentPrice: true,
               pnl: true,
             },
           },
