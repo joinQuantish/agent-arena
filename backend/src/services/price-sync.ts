@@ -3,7 +3,12 @@ import { PrismaClient } from '@prisma/client';
 // Solana RPC endpoint
 const SOLANA_RPC = process.env.HELIUS_RPC_URL || process.env.SOLANA_RPC_URL || 'https://api.mainnet-beta.solana.com';
 
-// Note: Previously used CoinGecko for SOL price, now just tracking USDC
+// Jupiter Quote API for token pricing
+const JUPITER_QUOTE_API = 'https://api.jup.ag/swap/v1/quote';
+
+// Token mints
+const USDC_MINT = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v';
+const SOL_MINT = 'So11111111111111111111111111111111111111112';
 
 // Known stablecoins (value = 1 USD)
 const STABLECOINS = new Set([
@@ -16,6 +21,56 @@ interface TokenBalance {
   mint: string;
   balance: number;
   decimals: number;
+}
+
+export interface TokenHolding {
+  mint: string;
+  symbol: string;
+  balance: number;
+  price: number;
+  value: number;
+}
+
+// Get USD value for a token via Jupiter Quote API
+async function getTokenUsdValue(
+  mint: string,
+  balance: number,
+  decimals: number
+): Promise<{ usdValue: number; price: number }> {
+  // Skip stablecoins (already $1)
+  if (STABLECOINS.has(mint)) {
+    return { usdValue: balance, price: 1 };
+  }
+
+  // Convert to raw amount (smallest unit)
+  const rawAmount = Math.floor(balance * Math.pow(10, decimals));
+  if (rawAmount === 0) return { usdValue: 0, price: 0 };
+
+  try {
+    const url = `${JUPITER_QUOTE_API}?inputMint=${mint}&outputMint=${USDC_MINT}&amount=${rawAmount}&slippageBps=50`;
+    const response = await fetch(url);
+
+    if (!response.ok) {
+      console.warn(`Jupiter quote failed for ${mint}: ${response.status}`);
+      return { usdValue: 0, price: 0 };
+    }
+
+    const data = await response.json() as any;
+
+    if (!data.outAmount) {
+      console.warn(`No quote available for ${mint}`);
+      return { usdValue: 0, price: 0 };
+    }
+
+    // outAmount is in USDC smallest units (6 decimals)
+    const usdValue = parseInt(data.outAmount) / 1e6;
+    const price = balance > 0 ? usdValue / balance : 0;
+
+    return { usdValue, price };
+  } catch (error) {
+    console.error(`Failed to get Jupiter price for ${mint}:`, error);
+    return { usdValue: 0, price: 0 };
+  }
 }
 
 // Fetch all token balances for a wallet
@@ -106,51 +161,80 @@ async function getTokenBalances(walletAddress: string): Promise<{ solBalance: nu
   }
 }
 
-// Note: Simplified to just track USDC balance
-// Prediction market gains/losses are in USDC, so this is sufficient
-// Can add SOL price tracking later if needed
-
-// Calculate total wallet value in USD
-// Simplified: Just track USDC/stablecoin balance
-// For prediction markets, gains/losses are in USDC anyway
+// Calculate total wallet value in USD using Jupiter for token pricing
 export async function calculateWalletValue(walletAddress: string): Promise<{
   totalValue: number;
   solBalance: number;
   solValue: number;
   usdcBalance: number;
   otherTokensValue: number;
-  breakdown: Array<{ mint: string; balance: number; price: number; value: number }>;
+  breakdown: TokenHolding[];
 }> {
   const { solBalance, tokens } = await getTokenBalances(walletAddress);
 
-  // Calculate stablecoin balances
+  const breakdown: TokenHolding[] = [];
+  let totalValue = 0;
   let usdcBalance = 0;
-  const breakdown: Array<{ mint: string; balance: number; price: number; value: number }> = [];
+  let otherTokensValue = 0;
 
+  // 1. Value SOL via Jupiter
+  if (solBalance > 0.001) { // Skip dust
+    const { usdValue, price } = await getTokenUsdValue(SOL_MINT, solBalance, 9);
+    if (usdValue > 0.01) {
+      totalValue += usdValue;
+      otherTokensValue += usdValue;
+      breakdown.push({
+        mint: SOL_MINT,
+        symbol: 'SOL',
+        balance: solBalance,
+        price,
+        value: usdValue
+      });
+    }
+    // Rate limit: Jupiter free tier ~1 req/sec
+    await new Promise(r => setTimeout(r, 1100));
+  }
+
+  // 2. Value each SPL token
   for (const token of tokens) {
     if (STABLECOINS.has(token.mint)) {
+      // Stablecoins = $1
       usdcBalance += token.balance;
+      totalValue += token.balance;
       breakdown.push({
         mint: token.mint,
+        symbol: 'USDC',
         balance: token.balance,
         price: 1,
         value: token.balance
       });
+    } else {
+      // Get Jupiter quote for non-stablecoins
+      const { usdValue, price } = await getTokenUsdValue(token.mint, token.balance, token.decimals);
+      if (usdValue > 0.01) { // Skip dust
+        totalValue += usdValue;
+        otherTokensValue += usdValue;
+        breakdown.push({
+          mint: token.mint,
+          symbol: token.mint.slice(0, 4) + '...' + token.mint.slice(-4), // Truncated mint as symbol
+          balance: token.balance,
+          price,
+          value: usdValue
+        });
+      }
+      // Rate limit between token price fetches
+      await new Promise(r => setTimeout(r, 1100));
     }
   }
 
-  console.log(`[Wallet] ${walletAddress}: USDC=$${usdcBalance.toFixed(2)}, SOL=${solBalance.toFixed(4)} (not included in value)`);
-
-  // For simplicity, wallet value = USDC balance only
-  // This makes tracking prediction market PnL straightforward
-  const totalValue = usdcBalance;
+  console.log(`[Wallet] ${walletAddress}: Total=$${totalValue.toFixed(2)} (SOL=$${(breakdown.find(b => b.symbol === 'SOL')?.value || 0).toFixed(2)}, USDC=$${usdcBalance.toFixed(2)}, Other=$${otherTokensValue.toFixed(2)})`);
 
   return {
     totalValue,
     solBalance,
-    solValue: 0, // Not tracking SOL value for now
+    solValue: breakdown.find(b => b.symbol === 'SOL')?.value || 0,
     usdcBalance,
-    otherTokensValue: 0,
+    otherTokensValue,
     breakdown
   };
 }
@@ -162,6 +246,7 @@ export async function syncAgentValue(prisma: PrismaClient, walletAddress: string
   initialEquity: number;
   totalPnl: number;
   totalReturn: number;
+  breakdown: TokenHolding[];
   error?: string;
 }> {
   try {
@@ -170,7 +255,7 @@ export async function syncAgentValue(prisma: PrismaClient, walletAddress: string
     });
 
     if (!agent) {
-      return { success: false, currentEquity: 0, initialEquity: 0, totalPnl: 0, totalReturn: 0, error: 'Agent not found' };
+      return { success: false, currentEquity: 0, initialEquity: 0, totalPnl: 0, totalReturn: 0, breakdown: [], error: 'Agent not found' };
     }
 
     // Calculate current wallet value
@@ -212,7 +297,8 @@ export async function syncAgentValue(prisma: PrismaClient, walletAddress: string
       currentEquity: totalValue,
       initialEquity,
       totalPnl,
-      totalReturn
+      totalReturn,
+      breakdown
     };
   } catch (error) {
     console.error('Error syncing agent value:', error);
@@ -222,6 +308,7 @@ export async function syncAgentValue(prisma: PrismaClient, walletAddress: string
       initialEquity: 0,
       totalPnl: 0,
       totalReturn: 0,
+      breakdown: [],
       error: error instanceof Error ? error.message : 'Unknown error'
     };
   }

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import * as api from '../../api/arena';
-import type { Agent } from '../../types/arena';
+import type { Agent, TokenHolding } from '../../types/arena';
 
 interface AgentDetailModalProps {
   agent: Agent;
@@ -9,7 +9,9 @@ interface AgentDetailModalProps {
 
 export function AgentDetailModal({ agent, onClose }: AgentDetailModalProps) {
   const [fullAgent, setFullAgent] = useState<Agent | null>(null);
+  const [tokenHoldings, setTokenHoldings] = useState<TokenHolding[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingHoldings, setLoadingHoldings] = useState(true);
 
   useEffect(() => {
     async function fetchAgent() {
@@ -25,6 +27,21 @@ export function AgentDetailModal({ agent, onClose }: AgentDetailModalProps) {
     }
     fetchAgent();
   }, [agent.id]);
+
+  useEffect(() => {
+    async function fetchTokenHoldings() {
+      try {
+        const data = await api.getAgentWalletValue(agent.walletAddress);
+        setTokenHoldings(data.breakdown || []);
+      } catch (error) {
+        console.error('Failed to fetch token holdings:', error);
+        setTokenHoldings([]);
+      } finally {
+        setLoadingHoldings(false);
+      }
+    }
+    fetchTokenHoldings();
+  }, [agent.walletAddress]);
 
   const displayAgent = fullAgent || agent;
 
@@ -129,9 +146,54 @@ export function AgentDetailModal({ agent, onClose }: AgentDetailModalProps) {
             </div>
           )}
 
-          <p className="text-xs text-qn-gray-400 mt-4 font-mono">
-            Wallet value = USDC balance (prediction market payouts)
-          </p>
+        </div>
+
+        {/* Token Holdings */}
+        <div className="p-4 border-t-2 border-qn-black">
+          <h4 className="text-sm font-bold uppercase tracking-tight text-qn-gray-500 mb-3">
+            Token Holdings
+          </h4>
+
+          {loadingHoldings ? (
+            <div className="flex justify-center py-4">
+              <div className="spinner" />
+            </div>
+          ) : tokenHoldings.length === 0 ? (
+            <p className="text-sm text-qn-gray-400 font-mono">No tokens found</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-qn-gray-200">
+                    <th className="text-left py-2 font-mono text-xs text-qn-gray-500 uppercase">Token</th>
+                    <th className="text-right py-2 font-mono text-xs text-qn-gray-500 uppercase">Balance</th>
+                    <th className="text-right py-2 font-mono text-xs text-qn-gray-500 uppercase">Price</th>
+                    <th className="text-right py-2 font-mono text-xs text-qn-gray-500 uppercase">Value</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {tokenHoldings.map((token) => (
+                    <tr key={token.mint} className="border-b border-qn-gray-100">
+                      <td className="py-2">
+                        <span className="font-mono text-sm font-medium">{token.symbol}</span>
+                      </td>
+                      <td className="text-right py-2 font-mono">{formatBalance(token.balance)}</td>
+                      <td className="text-right py-2 font-mono">${formatPrice(token.price)}</td>
+                      <td className="text-right py-2 font-mono font-medium">${token.value.toFixed(2)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr className="border-t-2 border-qn-black">
+                    <td colSpan={3} className="py-2 text-right font-mono text-xs text-qn-gray-500 uppercase">Total</td>
+                    <td className="text-right py-2 font-mono font-bold">
+                      ${tokenHoldings.reduce((sum, t) => sum + t.value, 0).toFixed(2)}
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          )}
         </div>
 
         {/* Footer */}
@@ -171,4 +233,19 @@ function formatDate(dateString: string): string {
 
 function copyToClipboard(text: string) {
   navigator.clipboard.writeText(text).catch(console.error);
+}
+
+function formatBalance(balance: number): string {
+  if (balance >= 1000000) return (balance / 1000000).toFixed(2) + 'M';
+  if (balance >= 1000) return (balance / 1000).toFixed(2) + 'K';
+  if (balance >= 1) return balance.toFixed(2);
+  if (balance >= 0.0001) return balance.toFixed(4);
+  return balance.toExponential(2);
+}
+
+function formatPrice(price: number): string {
+  if (price >= 1) return price.toFixed(2);
+  if (price >= 0.0001) return price.toFixed(4);
+  if (price > 0) return price.toExponential(2);
+  return '0.00';
 }

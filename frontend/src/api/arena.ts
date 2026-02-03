@@ -69,3 +69,21 @@ export async function registerAgent(data: {
     body: JSON.stringify(data),
   });
 }
+
+export async function getAgentWalletValue(walletAddress: string): Promise<{
+  currentEquity: number;
+  initialEquity: number;
+  totalPnl: number;
+  totalReturn: number;
+  breakdown: Array<{
+    mint: string;
+    symbol: string;
+    balance: number;
+    price: number;
+    value: number;
+  }>;
+}> {
+  // This fetches live token holdings via the admin sync endpoint
+  // In production, you'd have a public endpoint for this
+  return fetchApi(`/agents/wallet/${walletAddress}/value`);
+}

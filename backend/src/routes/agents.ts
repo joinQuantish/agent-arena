@@ -265,6 +265,36 @@ export function agentsRouter(prisma: PrismaClient) {
     }
   });
 
+  // Get live wallet value with token breakdown (public endpoint)
+  router.get('/wallet/:address/value', async (req, res) => {
+    try {
+      const { address } = req.params;
+
+      // Check if agent exists
+      const agent = await prisma.agent.findUnique({
+        where: { walletAddress: address },
+      });
+
+      if (!agent) {
+        return res.status(404).json({ error: 'Agent not found' });
+      }
+
+      // Calculate current wallet value with breakdown
+      const { totalValue, usdcBalance, solValue, otherTokensValue, breakdown } = await calculateWalletValue(address);
+
+      res.json({
+        currentEquity: totalValue,
+        initialEquity: agent.initialEquity,
+        totalPnl: totalValue - agent.initialEquity,
+        totalReturn: agent.initialEquity > 0 ? ((totalValue - agent.initialEquity) / agent.initialEquity) * 100 : 0,
+        breakdown
+      });
+    } catch (error) {
+      console.error('Get wallet value error:', error);
+      res.status(500).json({ error: 'Failed to get wallet value' });
+    }
+  });
+
   // Admin: Sync prices for a single agent (fetches from chain + DFlow)
   router.post('/admin/sync-prices/:walletAddress', async (req, res) => {
     try {
@@ -285,7 +315,8 @@ export function agentsRouter(prisma: PrismaClient) {
         currentEquity: result.currentEquity,
         initialEquity: result.initialEquity,
         totalPnl: result.totalPnl,
-        totalReturn: result.totalReturn
+        totalReturn: result.totalReturn,
+        breakdown: result.breakdown
       });
     } catch (error) {
       console.error('Price sync error:', error);

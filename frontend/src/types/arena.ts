@@ -8,6 +8,14 @@ export interface Position {
   pnl: number;
 }
 
+export interface TokenHolding {
+  mint: string;
+  symbol: string;
+  balance: number;
+  price: number;
+  value: number;
+}
+
 export interface PnlSnapshot {
   id: string;
   timestamp: string;
@@ -28,6 +36,7 @@ export interface Agent {
   updatedAt?: string;
   positions?: Position[];
   pnlSnapshots?: PnlSnapshot[];
+  tokenHoldings?: TokenHolding[];
 }
 
 export interface EquityCurve {

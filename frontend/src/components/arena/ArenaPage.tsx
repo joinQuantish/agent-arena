@@ -37,6 +37,8 @@ export function ArenaPage() {
       setSelectedAgent({
         ...partialAgent,
         avatarUrl: null,
+        initialEquity: 0,
+        currentEquity: 0,
         totalPnl: 0,
         totalReturn: 0,
         registeredAt: new Date().toISOString(),
