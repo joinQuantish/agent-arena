@@ -135,6 +135,98 @@ export function agentsRouter(prisma: PrismaClient) {
     }
   });
 
+  // Admin sync positions (for AI agents to report their positions)
+  router.post('/admin/sync-positions', async (req, res) => {
+    try {
+      const apiKey = req.headers['x-api-key'];
+      if (apiKey !== ADMIN_API_KEY) {
+        return res.status(401).json({ error: 'Invalid API key' });
+      }
+
+      const { walletAddress, positions, usdcBalance } = req.body;
+
+      if (!walletAddress) {
+        return res.status(400).json({ error: 'Missing walletAddress' });
+      }
+
+      // Find agent
+      const agent = await prisma.agent.findUnique({
+        where: { walletAddress },
+      });
+
+      if (!agent) {
+        return res.status(404).json({ error: 'Agent not found' });
+      }
+
+      // Delete existing positions and create new ones
+      await prisma.position.deleteMany({
+        where: { agentId: agent.id },
+      });
+
+      // Create new positions
+      if (positions && positions.length > 0) {
+        await prisma.position.createMany({
+          data: positions.map((p: any) => ({
+            agentId: agent.id,
+            marketTicker: p.marketTicker,
+            outcomeMint: p.outcomeMint || p.tokenMint,
+            outcome: p.outcome || p.side, // 'YES' or 'NO'
+            balance: p.balance,
+            costBasis: p.costBasis || p.entryPrice || 0,
+            currentPrice: p.currentPrice || 0,
+            pnl: p.pnl || 0,
+          })),
+        });
+      }
+
+      // Calculate totals
+      const positionsValue = (positions || []).reduce((sum: number, p: any) =>
+        sum + (p.balance * (p.currentPrice || 0)), 0);
+      const equity = (usdcBalance || 0) + positionsValue;
+
+      // Get previous snapshot for PnL calculation
+      const prevSnapshot = await prisma.pnlSnapshot.findFirst({
+        where: { agentId: agent.id },
+        orderBy: { timestamp: 'desc' },
+      });
+
+      const startingEquity = prevSnapshot?.equity || equity;
+      const totalPnl = equity - startingEquity;
+      const totalReturn = startingEquity > 0 ? (totalPnl / startingEquity) * 100 : 0;
+
+      // Create new snapshot
+      await prisma.pnlSnapshot.create({
+        data: {
+          agentId: agent.id,
+          equity,
+          usdcBalance: usdcBalance || 0,
+          positionsValue,
+          totalPnl,
+        },
+      });
+
+      // Update agent totals
+      await prisma.agent.update({
+        where: { id: agent.id },
+        data: {
+          totalPnl,
+          totalReturn,
+        },
+      });
+
+      res.json({
+        message: 'Positions synced',
+        equity,
+        totalPnl,
+        totalReturn,
+        positionsCount: (positions || []).length,
+      });
+    } catch (error) {
+      console.error('Position sync error:', error);
+      res.status(500).json({ error: 'Failed to sync positions' });
+    }
+  });
+
   // Get agent by wallet address
   router.get('/wallet/:address', async (req, res) => {
     try {
