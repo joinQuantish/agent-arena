@@ -213,11 +213,11 @@ export function EquityCurveChart({ onAgentClick, selectedAgentId }: EquityCurveC
       </div>
 
       {/* Chart Container with brutalist border */}
-      <div className="relative">
-        <div className="absolute -inset-0.5 bg-qn-black" style={{ transform: 'translate(3px, 3px)' }} />
+      <div className="relative h-[350px]">
+        <div className="absolute inset-0 bg-qn-black" style={{ transform: 'translate(4px, 4px)' }} />
         <div
           ref={chartContainerRef}
-          className="relative border-2 border-qn-black bg-white"
+          className="relative h-full border-2 border-qn-black bg-white"
         />
       </div>
 
