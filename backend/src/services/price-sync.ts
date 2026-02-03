@@ -107,15 +107,37 @@ async function getTokenBalances(walletAddress: string): Promise<{ solBalance: nu
   }
 }
 
+// Cache SOL price to avoid rate limiting
+let cachedSolPrice = 100; // Fallback price
+let lastPriceFetch = 0;
+const PRICE_CACHE_MS = 60000; // Cache for 1 minute
+
 // Get SOL price from CoinGecko
 async function getSolPrice(): Promise<number> {
+  const now = Date.now();
+
+  // Return cached price if recent
+  if (now - lastPriceFetch < PRICE_CACHE_MS && cachedSolPrice > 0) {
+    return cachedSolPrice;
+  }
+
   try {
     const response = await fetch(`${COINGECKO_API}?ids=solana&vs_currencies=usd`);
     const data = await response.json() as any;
-    return data?.solana?.usd || 0;
+    const price = data?.solana?.usd;
+
+    if (price && price > 0) {
+      cachedSolPrice = price;
+      lastPriceFetch = now;
+      console.log(`[Price] SOL price updated: $${price}`);
+      return price;
+    }
+
+    console.log('[Price] CoinGecko returned no price, using cached:', cachedSolPrice);
+    return cachedSolPrice;
   } catch (error) {
-    console.error('Error fetching SOL price:', error);
-    return 0;
+    console.error('[Price] Error fetching SOL price, using cached:', cachedSolPrice, error);
+    return cachedSolPrice;
   }
 }
 
@@ -131,6 +153,8 @@ export async function calculateWalletValue(walletAddress: string): Promise<{
 }> {
   const { solBalance, tokens } = await getTokenBalances(walletAddress);
   const solPrice = await getSolPrice();
+
+  console.log(`[Wallet] ${walletAddress}: SOL balance=${solBalance}, SOL price=$${solPrice}, tokens=${tokens.length}`);
 
   // Calculate values
   let usdcBalance = 0;
