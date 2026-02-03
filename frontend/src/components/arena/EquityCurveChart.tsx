@@ -36,86 +36,84 @@ export function EquityCurveChart({ onAgentClick, selectedAgentId }: EquityCurveC
   const [hoveredAgent, setHoveredAgent] = useState<string | null>(null);
   const [chartReady, setChartReady] = useState(false);
 
-  // Create chart and update with data
+  // Create chart once
   useEffect(() => {
-    if (!chartContainerRef.current || equityCurves.length === 0) return;
+    if (!chartContainerRef.current) return;
 
-    // If chart doesn't exist, create it
-    if (!chartRef.current) {
-      const chart = createChart(chartContainerRef.current, {
-        layout: {
-          background: { type: ColorType.Solid, color: '#fafafa' },
-          textColor: '#525252',
-          fontFamily: '"Space Mono", monospace',
-          fontSize: 11,
+    const chart = createChart(chartContainerRef.current, {
+      layout: {
+        background: { type: ColorType.Solid, color: '#fafafa' },
+        textColor: '#525252',
+        fontFamily: '"Space Mono", monospace',
+        fontSize: 11,
+      },
+      grid: {
+        vertLines: { color: '#e5e5e5', style: LineStyle.Solid },
+        horzLines: { color: '#e5e5e5', style: LineStyle.Solid },
+      },
+      width: chartContainerRef.current.clientWidth,
+      height: 350,
+      rightPriceScale: {
+        borderColor: '#0d0d0d',
+        borderVisible: true,
+        scaleMargins: { top: 0.1, bottom: 0.1 },
+        autoScale: true,
+      },
+      timeScale: {
+        borderColor: '#0d0d0d',
+        borderVisible: true,
+        timeVisible: true,
+        secondsVisible: false,
+        fixLeftEdge: true,
+        fixRightEdge: true,
+      },
+      crosshair: {
+        mode: CrosshairMode.Normal,
+        vertLine: {
+          color: '#0d0d0d',
+          width: 1,
+          style: LineStyle.Dashed,
+          labelBackgroundColor: '#0d0d0d',
         },
-        grid: {
-          vertLines: { color: '#e5e5e5', style: LineStyle.Solid },
-          horzLines: { color: '#e5e5e5', style: LineStyle.Solid },
+        horzLine: {
+          color: '#0d0d0d',
+          width: 1,
+          style: LineStyle.Dashed,
+          labelBackgroundColor: '#0d0d0d',
         },
-        width: chartContainerRef.current.clientWidth,
-        height: 350,
-        rightPriceScale: {
-          borderColor: '#0d0d0d',
-          borderVisible: true,
-          scaleMargins: { top: 0.1, bottom: 0.1 },
-          autoScale: true,
-        },
-        timeScale: {
-          borderColor: '#0d0d0d',
-          borderVisible: true,
-          timeVisible: true,
-          secondsVisible: false,
-          fixLeftEdge: true,
-          fixRightEdge: true,
-        },
-        crosshair: {
-          mode: CrosshairMode.Normal,
-          vertLine: {
-            color: '#0d0d0d',
-            width: 1,
-            style: LineStyle.Dashed,
-            labelBackgroundColor: '#0d0d0d',
-          },
-          horzLine: {
-            color: '#0d0d0d',
-            width: 1,
-            style: LineStyle.Dashed,
-            labelBackgroundColor: '#0d0d0d',
-          },
-        },
-        handleScale: {
-          axisPressedMouseMove: true,
-        },
-        handleScroll: {
-          vertTouchDrag: false,
-        },
-      });
+      },
+      handleScale: {
+        axisPressedMouseMove: true,
+      },
+      handleScroll: {
+        vertTouchDrag: false,
+      },
+    });
 
-      chartRef.current = chart;
-      setChartReady(true);
+    chartRef.current = chart;
+    setChartReady(true);
 
-      // Handle resize
-      const handleResize = () => {
-        if (chartContainerRef.current && chartRef.current) {
-          chartRef.current.applyOptions({ width: chartContainerRef.current.clientWidth });
-        }
-      };
+    // Handle resize
+    const handleResize = () => {
+      if (chartContainerRef.current && chartRef.current) {
+        chartRef.current.applyOptions({ width: chartContainerRef.current.clientWidth });
+      }
+    };
 
-      window.addEventListener('resize', handleResize);
+    window.addEventListener('resize', handleResize);
 
-      // Cleanup function
-      return () => {
-        window.removeEventListener('resize', handleResize);
-        if (chartRef.current) {
-          chartRef.current.remove();
-          chartRef.current = null;
-          setChartReady(false);
-        }
-      };
-    }
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      chart.remove();
+      chartRef.current = null;
+      setChartReady(false);
+    };
+  }, []);
 
-    // Chart exists, update data
+  // Update data when equityCurves change
+  useEffect(() => {
+    if (!chartRef.current || equityCurves.length === 0) return;
+
     // Clear existing series
     seriesMapRef.current.forEach(({ series }) => {
       try {
@@ -180,32 +178,17 @@ export function EquityCurveChart({ onAgentClick, selectedAgentId }: EquityCurveC
     });
   }, [selectedAgentId, hoveredAgent, chartReady]);
 
-  if (loading) {
-    return (
-      <div className="h-[350px] flex items-center justify-center bg-qn-gray-50 border-2 border-qn-black">
-        <div className="flex flex-col items-center gap-3">
-          <div className="w-8 h-8 border-3 border-qn-black border-t-transparent rounded-full animate-spin" />
-          <span className="text-xs font-mono uppercase text-qn-gray-500">Loading chart...</span>
-        </div>
-      </div>
-    );
-  }
+  // Calculate stats
+  const topAgent = equityCurves.reduce((max, c) => {
+    const val = c.data[c.data.length - 1]?.value || 0;
+    return val > (max.value || 0) ? { agent: c.agent, value: val } : max;
+  }, { agent: null as EquityCurveAgent | null, value: 0 });
 
-  if (equityCurves.length === 0) {
-    return (
-      <div className="h-[350px] flex items-center justify-center bg-qn-gray-50 border-2 border-qn-black">
-        <div className="text-center">
-          <div className="text-4xl mb-3">📈</div>
-          <p className="text-qn-gray-600 font-mono text-sm uppercase font-bold mb-1">
-            No Data Yet
-          </p>
-          <p className="text-qn-gray-400 text-xs font-mono">
-            Equity curves appear as agents trade
-          </p>
-        </div>
-      </div>
-    );
-  }
+  const totalEquity = equityCurves.reduce((sum, c) => {
+    return sum + (c.data[c.data.length - 1]?.value || 0);
+  }, 0);
+
+  const showOverlay = loading || equityCurves.length === 0;
 
   return (
     <div className="space-y-4">
@@ -227,83 +210,93 @@ export function EquityCurveChart({ onAgentClick, selectedAgentId }: EquityCurveC
           ref={chartContainerRef}
           className="relative h-full border-2 border-qn-black bg-white"
         />
+        {/* Overlay for loading/empty states */}
+        {showOverlay && (
+          <div className="absolute inset-0 flex items-center justify-center bg-qn-gray-50 border-2 border-qn-black z-10">
+            {loading ? (
+              <div className="flex flex-col items-center gap-3">
+                <div className="w-8 h-8 border-3 border-qn-black border-t-transparent rounded-full animate-spin" />
+                <span className="text-xs font-mono uppercase text-qn-gray-500">Loading chart...</span>
+              </div>
+            ) : (
+              <div className="text-center">
+                <div className="text-4xl mb-3">📈</div>
+                <p className="text-qn-gray-600 font-mono text-sm uppercase font-bold mb-1">
+                  No Data Yet
+                </p>
+                <p className="text-qn-gray-400 text-xs font-mono">
+                  Equity curves appear as agents trade
+                </p>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Legend */}
       <div className="border-2 border-qn-black bg-white p-3">
         <div className="text-xs font-mono uppercase text-qn-gray-500 mb-3">Agents</div>
         <div className="flex flex-wrap gap-2">
-          {equityCurves.map((curve, index) => {
-            const color = COLORS[index % COLORS.length];
-            const isSelected = selectedAgentId === curve.agent.id;
-            const isHovered = hoveredAgent === curve.agent.id;
-            const latestValue = curve.data[curve.data.length - 1]?.value || 0;
+          {equityCurves.length === 0 ? (
+            <span className="text-xs font-mono text-qn-gray-400">No agents yet</span>
+          ) : (
+            equityCurves.map((curve, index) => {
+              const color = COLORS[index % COLORS.length];
+              const isSelected = selectedAgentId === curve.agent.id;
+              const isHovered = hoveredAgent === curve.agent.id;
+              const latestValue = curve.data[curve.data.length - 1]?.value || 0;
 
-            return (
-              <button
-                key={curve.agent.id}
-                className={`group flex items-center gap-2 px-3 py-2 transition-all font-mono text-sm ${
-                  isSelected
-                    ? 'bg-qn-black text-white border-2 border-qn-black'
-                    : isHovered
-                    ? 'bg-qn-gray-100 border-2 border-qn-black'
-                    : 'bg-white border-2 border-qn-gray-300 hover:border-qn-black'
-                }`}
-                onClick={() => handleLegendClick(curve.agent)}
-                onMouseEnter={() => setHoveredAgent(curve.agent.id)}
-                onMouseLeave={() => setHoveredAgent(null)}
-              >
-                <div
-                  className="w-3 h-3 rounded-sm border border-qn-black/20"
-                  style={{ backgroundColor: color }}
-                />
-                <span className="font-medium truncate max-w-[120px]">
-                  {curve.agent.name}
-                </span>
-                <span className={`text-xs ${
-                  isSelected ? 'text-white/70' : 'text-qn-gray-400'
-                }`}>
-                  ${latestValue.toFixed(2)}
-                </span>
-              </button>
-            );
-          })}
+              return (
+                <button
+                  key={curve.agent.id}
+                  className={`group flex items-center gap-2 px-3 py-2 transition-all font-mono text-sm ${
+                    isSelected
+                      ? 'bg-qn-black text-white border-2 border-qn-black'
+                      : isHovered
+                      ? 'bg-qn-gray-100 border-2 border-qn-black'
+                      : 'bg-white border-2 border-qn-gray-300 hover:border-qn-black'
+                  }`}
+                  onClick={() => handleLegendClick(curve.agent)}
+                  onMouseEnter={() => setHoveredAgent(curve.agent.id)}
+                  onMouseLeave={() => setHoveredAgent(null)}
+                >
+                  <div
+                    className="w-3 h-3 rounded-sm border border-qn-black/20"
+                    style={{ backgroundColor: color }}
+                  />
+                  <span className="font-medium truncate max-w-[120px]">
+                    {curve.agent.name}
+                  </span>
+                  <span className={`text-xs ${
+                    isSelected ? 'text-white/70' : 'text-qn-gray-400'
+                  }`}>
+                    ${latestValue.toFixed(2)}
+                  </span>
+                </button>
+              );
+            })
+          )}
         </div>
       </div>
 
       {/* Stats Summary */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        {(() => {
-          const topAgent = equityCurves.reduce((max, c) => {
-            const val = c.data[c.data.length - 1]?.value || 0;
-            return val > (max.value || 0) ? { agent: c.agent, value: val } : max;
-          }, { agent: null as EquityCurveAgent | null, value: 0 });
-
-          const totalEquity = equityCurves.reduce((sum, c) => {
-            return sum + (c.data[c.data.length - 1]?.value || 0);
-          }, 0);
-
-          return (
-            <>
-              <div className="bg-white border-2 border-qn-black p-3">
-                <div className="text-xs font-mono uppercase text-qn-gray-500 mb-1">Leader</div>
-                <div className="font-mono font-bold truncate">{topAgent.agent?.name || '-'}</div>
-              </div>
-              <div className="bg-white border-2 border-qn-black p-3">
-                <div className="text-xs font-mono uppercase text-qn-gray-500 mb-1">Top Equity</div>
-                <div className="font-mono font-bold text-emerald-600">${topAgent.value.toFixed(2)}</div>
-              </div>
-              <div className="bg-white border-2 border-qn-black p-3">
-                <div className="text-xs font-mono uppercase text-qn-gray-500 mb-1">Total Equity</div>
-                <div className="font-mono font-bold">${totalEquity.toFixed(2)}</div>
-              </div>
-              <div className="bg-white border-2 border-qn-black p-3">
-                <div className="text-xs font-mono uppercase text-qn-gray-500 mb-1">Competing</div>
-                <div className="font-mono font-bold">{equityCurves.length} agents</div>
-              </div>
-            </>
-          );
-        })()}
+        <div className="bg-white border-2 border-qn-black p-3">
+          <div className="text-xs font-mono uppercase text-qn-gray-500 mb-1">Leader</div>
+          <div className="font-mono font-bold truncate">{topAgent.agent?.name || '-'}</div>
+        </div>
+        <div className="bg-white border-2 border-qn-black p-3">
+          <div className="text-xs font-mono uppercase text-qn-gray-500 mb-1">Top Equity</div>
+          <div className="font-mono font-bold text-emerald-600">${topAgent.value.toFixed(2)}</div>
+        </div>
+        <div className="bg-white border-2 border-qn-black p-3">
+          <div className="text-xs font-mono uppercase text-qn-gray-500 mb-1">Total Equity</div>
+          <div className="font-mono font-bold">${totalEquity.toFixed(2)}</div>
+        </div>
+        <div className="bg-white border-2 border-qn-black p-3">
+          <div className="text-xs font-mono uppercase text-qn-gray-500 mb-1">Competing</div>
+          <div className="font-mono font-bold">{equityCurves.length} agents</div>
+        </div>
       </div>
     </div>
   );
