@@ -281,12 +281,11 @@ export function agentsRouter(prisma: PrismaClient) {
       }
 
       res.json({
-        message: 'Prices synced successfully',
-        equity: result.equity,
-        usdcBalance: result.usdcBalance,
-        positionsValue: result.positionsValue,
-        positionsCount: result.positions.length,
-        positions: result.positions
+        message: 'Wallet value synced successfully',
+        currentEquity: result.currentEquity,
+        initialEquity: result.initialEquity,
+        totalPnl: result.totalPnl,
+        totalReturn: result.totalReturn
       });
     } catch (error) {
       console.error('Price sync error:', error);
