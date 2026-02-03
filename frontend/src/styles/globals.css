@@ -2,6 +2,13 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Custom utilities */
+@layer utilities {
+  .border-3 {
+    border-width: 3px;
+  }
+}
+
 :root {
   --background: #f5f5f5;
   --background-secondary: #ffffff;
