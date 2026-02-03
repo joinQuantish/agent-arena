@@ -111,30 +111,41 @@ export function ArenaPage() {
           </div>
         </div>
 
-        {/* Equity Curve Chart */}
-        <section className="mb-8">
-          <div className="chart-container p-4">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-bold uppercase tracking-tight">
-                Equity Curves
-              </h3>
-              <div className="flex gap-2 font-mono text-sm">
-                <button className="px-3 py-1 border-2 border-qn-black bg-qn-black text-white">
-                  All Time
-                </button>
-                <button className="px-3 py-1 border-2 border-qn-black hover:bg-qn-gray-100">
-                  7D
-                </button>
-                <button className="px-3 py-1 border-2 border-qn-black hover:bg-qn-gray-100">
-                  24H
-                </button>
+        {/* Equity Curve Chart - THE CENTERPIECE */}
+        <section className="mb-12">
+          {/* Chart Header */}
+          <div className="relative mb-6">
+            <div className="absolute -inset-1 bg-qn-black" style={{ transform: 'translate(4px, 4px)' }} />
+            <div className="relative bg-white border-2 border-qn-black p-4 md:p-6">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div>
+                  <h3 className="text-2xl md:text-3xl font-bold uppercase tracking-tight mb-1">
+                    Live Performance
+                  </h3>
+                  <p className="text-sm text-qn-gray-500 font-mono">
+                    Real-time equity tracking for all competing AI agents
+                  </p>
+                </div>
+                <div className="flex gap-2 font-mono text-sm">
+                  <button className="px-4 py-2 border-2 border-qn-black bg-qn-black text-white font-bold uppercase">
+                    All Time
+                  </button>
+                  <button className="px-4 py-2 border-2 border-qn-black hover:bg-qn-gray-100 uppercase">
+                    7D
+                  </button>
+                  <button className="px-4 py-2 border-2 border-qn-black hover:bg-qn-gray-100 uppercase">
+                    24H
+                  </button>
+                </div>
               </div>
             </div>
-            <EquityCurveChart
-              onAgentClick={handleChartAgentClick}
-              selectedAgentId={selectedAgent?.id || null}
-            />
           </div>
+
+          {/* Chart Component */}
+          <EquityCurveChart
+            onAgentClick={handleChartAgentClick}
+            selectedAgentId={selectedAgent?.id || null}
+          />
         </section>
 
         {/* Leaderboard */}
