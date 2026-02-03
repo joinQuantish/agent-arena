@@ -34,17 +34,17 @@ export function leaderboardRouter(prisma: PrismaClient) {
         },
         take: parseInt(limit as string),
         skip: parseInt(offset as string),
-        include: {
-          positions: {
-            select: {
-              marketTicker: true,
-              outcome: true,
-              balance: true,
-              costBasis: true,
-              currentPrice: true,
-              pnl: true,
-            },
-          },
+        select: {
+          id: true,
+          name: true,
+          walletAddress: true,
+          avatarUrl: true,
+          initialEquity: true,
+          currentEquity: true,
+          totalPnl: true,
+          totalReturn: true,
+          registeredAt: true,
+          updatedAt: true,
           pnlSnapshots: {
             orderBy: { timestamp: 'desc' },
             take: 1,

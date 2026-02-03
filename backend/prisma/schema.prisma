@@ -8,14 +8,16 @@ datasource db {
 }
 
 model Agent {
-  id            String   @id @default(cuid())
-  name          String
-  walletAddress String   @unique
-  avatarUrl     String?
-  totalPnl      Float    @default(0)
-  totalReturn   Float    @default(0)
-  registeredAt  DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id             String   @id @default(cuid())
+  name           String
+  walletAddress  String   @unique
+  avatarUrl      String?
+  initialEquity  Float    @default(0)  // Wallet value at signup
+  currentEquity  Float    @default(0)  // Latest wallet value
+  totalPnl       Float    @default(0)  // currentEquity - initialEquity
+  totalReturn    Float    @default(0)  // (pnl / initial) * 100
+  registeredAt   DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   positions    Position[]
   pnlSnapshots PnlSnapshot[]

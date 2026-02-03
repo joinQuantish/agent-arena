@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { PrismaClient } from '@prisma/client';
 import nacl from 'tweetnacl';
 import bs58 from 'bs58';
-import { syncAgentPositions, syncAllAgents } from '../services/price-sync.js';
+import { syncAgentValue, syncAllAgents, calculateWalletValue } from '../services/price-sync.js';
 
 // Admin API key for programmatic agent registration (e.g., AI agents)
 const ADMIN_API_KEY = process.env.ADMIN_API_KEY || 'arena-admin-key-dev';
@@ -34,12 +34,20 @@ export function agentsRouter(prisma: PrismaClient) {
         return res.status(409).json({ error: 'Agent already registered', agent: existing });
       }
 
-      // Create new agent
+      // Calculate initial wallet value
+      const { totalValue, usdcBalance, solValue, otherTokensValue } = await calculateWalletValue(walletAddress);
+      console.log(`New agent ${name}: Initial wallet value = $${totalValue.toFixed(2)}`);
+
+      // Create new agent with initial equity
       const agent = await prisma.agent.create({
         data: {
           name,
           walletAddress,
           avatarUrl: avatarUrl || generateGravatarUrl(walletAddress),
+          initialEquity: totalValue,
+          currentEquity: totalValue,
+          totalPnl: 0,
+          totalReturn: 0,
         },
       });
 
@@ -47,9 +55,9 @@ export function agentsRouter(prisma: PrismaClient) {
       await prisma.pnlSnapshot.create({
         data: {
           agentId: agent.id,
-          equity: 0,
-          usdcBalance: 0,
-          positionsValue: 0,
+          equity: totalValue,
+          usdcBalance,
+          positionsValue: solValue + otherTokensValue,
           totalPnl: 0,
         },
       });
@@ -109,12 +117,20 @@ export function agentsRouter(prisma: PrismaClient) {
         return res.status(409).json({ error: 'Agent already registered', agent: existing });
       }
 
-      // Create new agent
+      // Calculate initial wallet value
+      const { totalValue, usdcBalance, solValue, otherTokensValue } = await calculateWalletValue(walletAddress);
+      console.log(`New agent ${name} (admin): Initial wallet value = $${totalValue.toFixed(2)}`);
+
+      // Create new agent with initial equity
       const agent = await prisma.agent.create({
         data: {
           name,
           walletAddress,
           avatarUrl: avatarUrl || generateGravatarUrl(walletAddress),
+          initialEquity: totalValue,
+          currentEquity: totalValue,
+          totalPnl: 0,
+          totalReturn: 0,
         },
       });
 
@@ -122,9 +138,9 @@ export function agentsRouter(prisma: PrismaClient) {
       await prisma.pnlSnapshot.create({
         data: {
           agentId: agent.id,
-          equity: 0,
-          usdcBalance: 0,
-          positionsValue: 0,
+          equity: totalValue,
+          usdcBalance,
+          positionsValue: solValue + otherTokensValue,
           totalPnl: 0,
         },
       });
@@ -258,7 +274,7 @@ export function agentsRouter(prisma: PrismaClient) {
       }
 
       const { walletAddress } = req.params;
-      const result = await syncAgentPositions(prisma, walletAddress);
+      const result = await syncAgentValue(prisma, walletAddress);
 
       if (!result.success) {
         return res.status(400).json({ error: result.error });

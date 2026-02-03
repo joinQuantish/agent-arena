@@ -3,16 +3,18 @@ import { PrismaClient } from '@prisma/client';
 // Solana RPC endpoint
 const SOLANA_RPC = process.env.HELIUS_RPC_URL || process.env.SOLANA_RPC_URL || 'https://api.mainnet-beta.solana.com';
 
-// Kalshi public API (no auth required for market data)
-const KALSHI_API = 'https://api.elections.kalshi.com/trade-api/v2';
+// Jupiter Price API (free, no auth required)
+const JUPITER_PRICE_API = 'https://api.jup.ag/price/v2';
 
-// Known token addresses
-const USDC_MINT = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v';
-const CASH_MINT = 'CASHx9KJUStyftLFWGvEVf59SGeG9sh5FfcnZMVPCASH';
+// Known stablecoins (value = 1 USD)
+const STABLECOINS = new Set([
+  'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v', // USDC
+  'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB', // USDT
+  'USDH1SM1ojwWUga67PGrgFWUHibbjqMvuMaDkRJTgkX',  // USDH
+]);
 
-// Known token mint to market mapping (populated from initial sync)
-// This avoids needing to reverse-lookup mints via DFlow API
-const KNOWN_MINTS: Record<string, { ticker: string; outcome: 'YES' | 'NO' }> = {};
+// SOL mint address (wrapped SOL)
+const SOL_MINT = 'So11111111111111111111111111111111111111112';
 
 interface TokenBalance {
   mint: string;
@@ -20,37 +22,37 @@ interface TokenBalance {
   decimals: number;
 }
 
-interface KalshiMarket {
-  ticker: string;
-  title: string;
-  yes_bid: number;
-  yes_ask: number;
-  no_bid: number;
-  no_ask: number;
-  status: string;
+interface TokenPrice {
+  mint: string;
+  price: number;
 }
 
-interface Position {
-  marketTicker: string;
-  outcomeMint: string;
-  outcome: 'YES' | 'NO';
-  balance: number;
-  currentPrice: number;
-  marketValue: number;
-}
-
-// Fetch SPL token balances for a wallet using Solana RPC
-async function getTokenBalances(walletAddress: string): Promise<TokenBalance[]> {
+// Fetch all token balances for a wallet
+async function getTokenBalances(walletAddress: string): Promise<{ solBalance: number; tokens: TokenBalance[] }> {
   try {
-    const balances: TokenBalance[] = [];
+    const tokens: TokenBalance[] = [];
 
-    // Fetch standard SPL tokens
-    const response = await fetch(SOLANA_RPC, {
+    // Get native SOL balance
+    const solResponse = await fetch(SOLANA_RPC, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         jsonrpc: '2.0',
         id: 1,
+        method: 'getBalance',
+        params: [walletAddress]
+      })
+    });
+    const solData = await solResponse.json() as any;
+    const solBalance = (solData.result?.value || 0) / 1e9; // Convert lamports to SOL
+
+    // Fetch standard SPL tokens
+    const splResponse = await fetch(SOLANA_RPC, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: 2,
         method: 'getTokenAccountsByOwner',
         params: [
           walletAddress,
@@ -60,14 +62,13 @@ async function getTokenBalances(walletAddress: string): Promise<TokenBalance[]> 
       })
     });
 
-    const data = await response.json() as any;
-
-    if (data.result?.value) {
-      for (const account of data.result.value) {
+    const splData = await splResponse.json() as any;
+    if (splData.result?.value) {
+      for (const account of splData.result.value) {
         const info = account.account.data.parsed.info;
         const balance = parseFloat(info.tokenAmount.uiAmountString || '0');
         if (balance > 0) {
-          balances.push({
+          tokens.push({
             mint: info.mint,
             balance,
             decimals: info.tokenAmount.decimals
@@ -76,13 +77,13 @@ async function getTokenBalances(walletAddress: string): Promise<TokenBalance[]> 
       }
     }
 
-    // Also fetch Token-2022 accounts (used by Kalshi prediction tokens)
-    const response2022 = await fetch(SOLANA_RPC, {
+    // Fetch Token-2022 tokens (used by Kalshi prediction tokens)
+    const t22Response = await fetch(SOLANA_RPC, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         jsonrpc: '2.0',
-        id: 2,
+        id: 3,
         method: 'getTokenAccountsByOwner',
         params: [
           walletAddress,
@@ -92,13 +93,13 @@ async function getTokenBalances(walletAddress: string): Promise<TokenBalance[]> 
       })
     });
 
-    const data2022 = await response2022.json() as any;
-    if (data2022.result?.value) {
-      for (const account of data2022.result.value) {
+    const t22Data = await t22Response.json() as any;
+    if (t22Data.result?.value) {
+      for (const account of t22Data.result.value) {
         const info = account.account.data.parsed.info;
         const balance = parseFloat(info.tokenAmount.uiAmountString || '0');
         if (balance > 0) {
-          balances.push({
+          tokens.push({
             mint: info.mint,
             balance,
             decimals: info.tokenAmount.decimals
@@ -107,254 +108,181 @@ async function getTokenBalances(walletAddress: string): Promise<TokenBalance[]> 
       }
     }
 
-    return balances;
+    return { solBalance, tokens };
   } catch (error) {
     console.error('Error fetching token balances:', error);
-    return [];
+    return { solBalance: 0, tokens: [] };
   }
 }
 
-// Get market data from Kalshi public API
-async function getKalshiMarket(ticker: string): Promise<KalshiMarket | null> {
-  try {
-    const response = await fetch(`${KALSHI_API}/markets/${ticker}`, {
-      headers: { 'Accept': 'application/json' }
-    });
+// Get token prices from Jupiter
+async function getTokenPrices(mints: string[]): Promise<Map<string, number>> {
+  const prices = new Map<string, number>();
 
-    if (!response.ok) {
-      console.error(`Kalshi API error for ${ticker}: ${response.status}`);
-      return null;
+  if (mints.length === 0) return prices;
+
+  try {
+    // Jupiter price API accepts comma-separated mints
+    const response = await fetch(`${JUPITER_PRICE_API}?ids=${mints.join(',')}`);
+    const data = await response.json() as any;
+
+    if (data.data) {
+      for (const [mint, info] of Object.entries(data.data)) {
+        const priceInfo = info as any;
+        if (priceInfo?.price) {
+          prices.set(mint, parseFloat(priceInfo.price));
+        }
+      }
+    }
+  } catch (error) {
+    console.error('Error fetching Jupiter prices:', error);
+  }
+
+  return prices;
+}
+
+// Calculate total wallet value in USD
+export async function calculateWalletValue(walletAddress: string): Promise<{
+  totalValue: number;
+  solBalance: number;
+  solValue: number;
+  usdcBalance: number;
+  otherTokensValue: number;
+  breakdown: Array<{ mint: string; balance: number; price: number; value: number }>;
+}> {
+  const { solBalance, tokens } = await getTokenBalances(walletAddress);
+
+  // Collect all non-stablecoin mints to price (plus SOL)
+  const mintsToPrice = [SOL_MINT];
+  for (const token of tokens) {
+    if (!STABLECOINS.has(token.mint)) {
+      mintsToPrice.push(token.mint);
+    }
+  }
+
+  // Get prices from Jupiter
+  const prices = await getTokenPrices(mintsToPrice);
+  const solPrice = prices.get(SOL_MINT) || 0;
+
+  // Calculate values
+  let totalValue = 0;
+  let usdcBalance = 0;
+  let otherTokensValue = 0;
+  const breakdown: Array<{ mint: string; balance: number; price: number; value: number }> = [];
+
+  // SOL value
+  const solValue = solBalance * solPrice;
+  totalValue += solValue;
+  if (solBalance > 0) {
+    breakdown.push({ mint: 'SOL', balance: solBalance, price: solPrice, value: solValue });
+  }
+
+  // Token values
+  for (const token of tokens) {
+    let value = 0;
+    let price = 0;
+
+    if (STABLECOINS.has(token.mint)) {
+      // Stablecoins = $1
+      price = 1;
+      value = token.balance;
+      usdcBalance += token.balance;
+    } else {
+      // Get price from Jupiter
+      price = prices.get(token.mint) || 0;
+      value = token.balance * price;
+      otherTokensValue += value;
     }
 
-    const data = await response.json() as any;
-    const market = data.market;
+    totalValue += value;
 
-    return {
-      ticker: market.ticker,
-      title: market.title,
-      yes_bid: market.yes_bid / 100, // Convert cents to dollars
-      yes_ask: market.yes_ask / 100,
-      no_bid: market.no_bid / 100,
-      no_ask: market.no_ask / 100,
-      status: market.status
-    };
-  } catch (error) {
-    console.error(`Error fetching Kalshi market ${ticker}:`, error);
-    return null;
+    if (value > 0.01) { // Only track tokens worth > 1 cent
+      breakdown.push({
+        mint: token.mint,
+        balance: token.balance,
+        price,
+        value
+      });
+    }
   }
+
+  return {
+    totalValue,
+    solBalance,
+    solValue,
+    usdcBalance,
+    otherTokensValue,
+    breakdown
+  };
 }
 
-// Sync positions and prices for a single agent
-export async function syncAgentPositions(prisma: PrismaClient, walletAddress: string): Promise<{
+// Sync a single agent's wallet value
+export async function syncAgentValue(prisma: PrismaClient, walletAddress: string): Promise<{
   success: boolean;
-  equity: number;
-  usdcBalance: number;
-  positionsValue: number;
-  positions: Position[];
+  currentEquity: number;
+  initialEquity: number;
+  totalPnl: number;
+  totalReturn: number;
   error?: string;
 }> {
   try {
-    // Find the agent
     const agent = await prisma.agent.findUnique({
-      where: { walletAddress },
-      include: { positions: true }
+      where: { walletAddress }
     });
 
     if (!agent) {
-      return { success: false, equity: 0, usdcBalance: 0, positionsValue: 0, positions: [], error: 'Agent not found' };
+      return { success: false, currentEquity: 0, initialEquity: 0, totalPnl: 0, totalReturn: 0, error: 'Agent not found' };
     }
 
-    // Build mint to position mapping from existing positions
-    const mintToPosition: Record<string, { ticker: string; outcome: string }> = {};
-    for (const pos of agent.positions) {
-      mintToPosition[pos.outcomeMint] = {
-        ticker: pos.marketTicker,
-        outcome: pos.outcome
-      };
-      // Also add to global known mints cache
-      KNOWN_MINTS[pos.outcomeMint] = {
-        ticker: pos.marketTicker,
-        outcome: pos.outcome as 'YES' | 'NO'
-      };
-    }
+    // Calculate current wallet value
+    const { totalValue, usdcBalance, solValue, otherTokensValue, breakdown } = await calculateWalletValue(walletAddress);
 
-    // Fetch current token balances from chain
-    const tokenBalances = await getTokenBalances(walletAddress);
-    console.log(`Found ${tokenBalances.length} token balances for ${walletAddress}`);
+    console.log(`Agent ${agent.name}: Total=$${totalValue.toFixed(2)} (SOL=$${solValue.toFixed(2)}, USDC=$${usdcBalance.toFixed(2)}, Other=$${otherTokensValue.toFixed(2)})`);
 
-    // Extract USDC balance
-    const usdcToken = tokenBalances.find(t => t.mint === USDC_MINT);
-    const usdcBalance = usdcToken?.balance || 0;
+    // If this is the first sync (initialEquity is 0), set initial value
+    const initialEquity = agent.initialEquity > 0 ? agent.initialEquity : totalValue;
 
-    // Collect unique market tickers to fetch prices for
-    const tickersToFetch = new Set<string>();
-    for (const token of tokenBalances) {
-      if (token.mint === USDC_MINT || token.mint === CASH_MINT) continue;
-      const known = mintToPosition[token.mint] || KNOWN_MINTS[token.mint];
-      if (known) {
-        tickersToFetch.add(known.ticker);
-      }
-    }
+    // Calculate PnL
+    const totalPnl = totalValue - initialEquity;
+    const totalReturn = initialEquity > 0 ? (totalPnl / initialEquity) * 100 : 0;
 
-    // Fetch current prices from Kalshi
-    const marketPrices: Record<string, KalshiMarket> = {};
-    for (const ticker of tickersToFetch) {
-      const market = await getKalshiMarket(ticker);
-      if (market) {
-        marketPrices[ticker] = market;
-      }
-      // Small delay to avoid rate limiting
-      await new Promise(r => setTimeout(r, 100));
-    }
-
-    // Process positions
-    const positions: Position[] = [];
-    let positionsValue = 0;
-
-    for (const token of tokenBalances) {
-      if (token.mint === USDC_MINT || token.mint === CASH_MINT) continue;
-
-      const known = mintToPosition[token.mint] || KNOWN_MINTS[token.mint];
-      if (!known) {
-        console.log(`Unknown token mint: ${token.mint} (${token.balance} tokens)`);
-        continue;
-      }
-
-      const market = marketPrices[known.ticker];
-      if (!market) {
-        console.log(`No price data for ${known.ticker}`);
-        continue;
-      }
-
-      // Use bid price for conservative valuation
-      const currentPrice = known.outcome === 'YES' ? market.yes_bid : market.no_bid;
-      const marketValue = token.balance * currentPrice;
-
-      positions.push({
-        marketTicker: known.ticker,
-        outcomeMint: token.mint,
-        outcome: known.outcome as 'YES' | 'NO',
-        balance: token.balance,
-        currentPrice,
-        marketValue
-      });
-
-      positionsValue += marketValue;
-    }
-
-    const equity = usdcBalance + positionsValue;
-    console.log(`Agent ${agent.name}: USDC=$${usdcBalance.toFixed(2)}, Positions=$${positionsValue.toFixed(2)}, Total=$${equity.toFixed(2)}`);
-
-    // Build map of existing positions to preserve entry prices and mappings
-    const existingPositions = await prisma.position.findMany({
-      where: { agentId: agent.id }
-    });
-    const existingByMint: Record<string, { costBasis: number; marketTicker: string; outcome: string }> = {};
-    for (const pos of existingPositions) {
-      existingByMint[pos.outcomeMint] = {
-        costBasis: pos.costBasis,
-        marketTicker: pos.marketTicker,
-        outcome: pos.outcome
-      };
-    }
-
-    // If we found on-chain positions, update the database
-    // If we found NO positions but have existing ones, keep them (might be RPC issue)
-    if (positions.length > 0 || existingPositions.length === 0) {
-      // Delete old positions
-      await prisma.position.deleteMany({
-        where: { agentId: agent.id }
-      });
-
-      // Create updated positions, preserving entry prices
-      if (positions.length > 0) {
-        await prisma.position.createMany({
-          data: positions.map(p => {
-            // Preserve existing costBasis, or use current price for new positions
-            const existing = existingByMint[p.outcomeMint];
-            const costBasis = existing?.costBasis || p.currentPrice;
-            const pnl = (p.currentPrice - costBasis) * p.balance;
-
-            return {
-              agentId: agent.id,
-              marketTicker: p.marketTicker,
-              outcomeMint: p.outcomeMint,
-              outcome: p.outcome,
-              balance: p.balance,
-              costBasis,
-              currentPrice: p.currentPrice,
-              pnl
-            };
-          })
-        });
-      }
-    } else {
-      console.log(`Skipping position update for ${agent.name}: no positions detected but ${existingPositions.length} exist in DB`);
-      // Use existing positions for calculations
-      for (const pos of existingPositions) {
-        positions.push({
-          marketTicker: pos.marketTicker,
-          outcomeMint: pos.outcomeMint,
-          outcome: pos.outcome as 'YES' | 'NO',
-          balance: pos.balance,
-          currentPrice: pos.currentPrice,
-          marketValue: pos.balance * pos.currentPrice
-        });
-      }
-    }
-
-    // Calculate total PnL from positions
-    const totalPositionPnl = positions.reduce((sum, p) => {
-      const existing = existingByMint[p.outcomeMint];
-      const costBasis = existing?.costBasis || p.currentPrice;
-      return sum + (p.currentPrice - costBasis) * p.balance;
-    }, 0);
-
-    // Total cost basis for return calculation
-    const totalCostBasis = positions.reduce((sum, p) => {
-      const existing = existingByMint[p.outcomeMint];
-      const costBasis = existing?.costBasis || p.currentPrice;
-      return sum + costBasis * p.balance;
-    }, 0);
-
-    const totalPnl = totalPositionPnl;
-    const totalReturn = totalCostBasis > 0 ? (totalPnl / totalCostBasis) * 100 : 0;
-
-    // Create new snapshot
-    await prisma.pnlSnapshot.create({
-      data: {
-        agentId: agent.id,
-        equity,
-        usdcBalance,
-        positionsValue,
-        totalPnl
-      }
-    });
-
-    // Update agent totals
+    // Update agent
     await prisma.agent.update({
       where: { id: agent.id },
       data: {
+        initialEquity,
+        currentEquity: totalValue,
         totalPnl,
         totalReturn
       }
     });
 
+    // Create snapshot for historical tracking
+    await prisma.pnlSnapshot.create({
+      data: {
+        agentId: agent.id,
+        equity: totalValue,
+        usdcBalance,
+        positionsValue: otherTokensValue + solValue, // Non-USDC value
+        totalPnl
+      }
+    });
+
     return {
       success: true,
-      equity,
-      usdcBalance,
-      positionsValue,
-      positions
+      currentEquity: totalValue,
+      initialEquity,
+      totalPnl,
+      totalReturn
     };
   } catch (error) {
-    console.error('Error syncing agent positions:', error);
+    console.error('Error syncing agent value:', error);
     return {
       success: false,
-      equity: 0,
-      usdcBalance: 0,
-      positionsValue: 0,
-      positions: [],
+      currentEquity: 0,
+      initialEquity: 0,
+      totalPnl: 0,
+      totalReturn: 0,
       error: error instanceof Error ? error.message : 'Unknown error'
     };
   }
@@ -374,20 +302,23 @@ export async function syncAllAgents(prisma: PrismaClient): Promise<{
   console.log(`Starting sync for ${agents.length} agents...`);
 
   for (const agent of agents) {
-    const result = await syncAgentPositions(prisma, agent.walletAddress);
+    const result = await syncAgentValue(prisma, agent.walletAddress);
 
     if (result.success) {
       synced++;
-      results.push({ wallet: agent.walletAddress, name: agent.name, success: true, equity: result.equity });
+      results.push({ wallet: agent.walletAddress, name: agent.name, success: true, equity: result.currentEquity });
     } else {
       failed++;
       results.push({ wallet: agent.walletAddress, name: agent.name, success: false, error: result.error });
     }
 
     // Delay between agents to avoid rate limiting
-    await new Promise(r => setTimeout(r, 1000));
+    await new Promise(r => setTimeout(r, 500));
   }
 
   console.log(`Sync complete: ${synced} synced, ${failed} failed`);
   return { synced, failed, results };
 }
+
+// Legacy export for backwards compatibility
+export const syncAgentPositions = syncAgentValue;
