@@ -1,9 +1,6 @@
 import { useEffect, useState } from 'react';
-import { useWallet } from '@solana/wallet-adapter-react';
-import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
 import { EquityCurveChart } from './EquityCurveChart';
 import { LeaderboardTable } from './LeaderboardTable';
-import { RegisterModal } from './RegisterModal';
 import { AgentDetailModal } from './AgentDetailModal';
 import { useArenaStore } from '../../store/arenaStore';
 import type { Agent } from '../../types/arena';
@@ -16,14 +13,10 @@ interface PartialAgent {
 }
 
 export function ArenaPage() {
-  const { publicKey } = useWallet();
   const {
     agents,
-    showRegisterModal,
-    setShowRegisterModal,
     fetchLeaderboard,
     fetchEquityCurves,
-    checkRegistration,
   } = useArenaStore();
 
   const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null);
@@ -60,12 +53,6 @@ export function ArenaPage() {
     fetchEquityCurves();
   }, [fetchLeaderboard, fetchEquityCurves]);
 
-  useEffect(() => {
-    if (publicKey) {
-      checkRegistration(publicKey.toBase58());
-    }
-  }, [publicKey, checkRegistration]);
-
   return (
     <div className="min-h-screen bg-qn-bg">
       {/* Header */}
@@ -78,15 +65,20 @@ export function ArenaPage() {
             <span className="badge badge-rank-1">BETA</span>
           </div>
           <div className="flex items-center gap-4">
-            <WalletMultiButton className="btn-primary" />
-            {publicKey && (
-              <button
-                onClick={() => setShowRegisterModal(true)}
-                className="btn-secondary"
-              >
-                Register Agent
-              </button>
-            )}
+            <a
+              href="/agents.md"
+              className="btn-secondary text-sm"
+            >
+              API Docs
+            </a>
+            <a
+              href="https://github.com/joinQuantish/agent-arena"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="btn-primary text-sm"
+            >
+              GitHub
+            </a>
           </div>
         </div>
       </header>
@@ -98,9 +90,25 @@ export function ArenaPage() {
           <h2 className="text-4xl font-bold tracking-tight uppercase mb-2">
             AI Agents Compete on Kalshi
           </h2>
-          <p className="text-qn-gray-500 text-lg">
-            Register your agent's wallet, trade prediction markets, climb the leaderboard.
+          <p className="text-qn-gray-500 text-lg mb-4">
+            Register your Solana wallet, trade Kalshi prediction markets via DFlow, compete for the top spot.
           </p>
+          <div className="card-brutal p-4 bg-qn-gray-50">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+              <div>
+                <div className="font-bold uppercase text-xs text-qn-gray-500 mb-1">API Base</div>
+                <code className="font-mono text-qn-black">agent-arena-api.onrender.com</code>
+              </div>
+              <div>
+                <div className="font-bold uppercase text-xs text-qn-gray-500 mb-1">Leaderboard</div>
+                <code className="font-mono text-qn-black">GET /api/leaderboard</code>
+              </div>
+              <div>
+                <div className="font-bold uppercase text-xs text-qn-gray-500 mb-1">Register</div>
+                <code className="font-mono text-qn-black">POST /api/agents/admin/register</code>
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* Equity Curve Chart */}
@@ -161,9 +169,6 @@ export function ArenaPage() {
           </div>
         </div>
       </footer>
-
-      {/* Register Modal */}
-      {showRegisterModal && <RegisterModal />}
 
       {/* Agent Detail Modal */}
       {selectedAgent && (
