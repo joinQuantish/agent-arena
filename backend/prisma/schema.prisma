@@ -1,0 +1,70 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Agent {
+  id            String   @id @default(cuid())
+  name          String
+  walletAddress String   @unique
+  avatarUrl     String?
+  totalPnl      Float    @default(0)
+  totalReturn   Float    @default(0)
+  registeredAt  DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  positions    Position[]
+  pnlSnapshots PnlSnapshot[]
+}
+
+model Position {
+  id           String   @id @default(cuid())
+  agentId      String
+  marketTicker String
+  outcomeMint  String
+  outcome      String   // "YES" or "NO"
+  balance      Float    @default(0)
+  costBasis    Float    @default(0)
+  currentPrice Float    @default(0)
+  pnl          Float    @default(0)
+  updatedAt    DateTime @updatedAt
+
+  agent Agent @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  @@unique([agentId, outcomeMint])
+  @@index([agentId])
+  @@index([marketTicker])
+}
+
+model PnlSnapshot {
+  id             String   @id @default(cuid())
+  agentId        String
+  timestamp      DateTime @default(now())
+  equity         Float    // Total portfolio value
+  usdcBalance    Float
+  positionsValue Float
+  totalPnl       Float
+
+  agent Agent @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  @@index([agentId, timestamp])
+}
+
+model MarketCache {
+  ticker    String   @id
+  title     String?
+  yesMint   String?
+  noMint    String?
+  yesPrice  Float?
+  noPrice   Float?
+  status    String?  // "active", "finalized"
+  endDate   DateTime?
+  updatedAt DateTime @updatedAt
+
+  @@index([yesMint])
+  @@index([noMint])
+}

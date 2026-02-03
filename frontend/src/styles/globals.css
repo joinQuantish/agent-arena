@@ -1,0 +1,218 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: #f5f5f5;
+  --background-secondary: #ffffff;
+  --text-primary: #0d0d0d;
+  --text-secondary: #525252;
+  --text-tertiary: #737373;
+  --primary-color: #0d0d0d;
+  --increase: #1cca5b;
+  --decrease: #ef4343;
+  --border-subtle: #e5e5e5;
+  --primary-stroke: #0d0d0d;
+}
+
+body {
+  background-color: var(--background);
+  color: var(--text-primary);
+  font-family: 'Space Grotesk', ui-sans-serif, -apple-system, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  min-height: 100vh;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: #f5f5f5;
+}
+::-webkit-scrollbar-thumb {
+  background: #a3a3a3;
+}
+
+/* Brutalist card */
+.card-brutal {
+  background-color: #ffffff;
+  border: 2px solid #0d0d0d;
+  box-shadow: 4px 4px 0px 0px rgb(13, 13, 13);
+}
+
+.card-brutal:hover {
+  box-shadow: 6px 6px 0px 0px rgb(13, 13, 13);
+  transform: translate(-1px, -1px);
+}
+
+/* Primary button */
+.btn-primary {
+  background-color: #0d0d0d;
+  color: #ffffff;
+  font-weight: 500;
+  padding: 0.5rem 1rem;
+  border: 2px solid #0d0d0d;
+  transition: all 150ms;
+  box-shadow: 2px 2px 0px 0px rgb(13, 13, 13);
+}
+
+.btn-primary:hover:not(:disabled) {
+  box-shadow: 4px 4px 0px 0px rgb(13, 13, 13);
+  transform: translate(-1px, -1px);
+}
+
+.btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Secondary button */
+.btn-secondary {
+  background-color: #ffffff;
+  color: #0d0d0d;
+  font-weight: 500;
+  padding: 0.5rem 1rem;
+  border: 2px solid #0d0d0d;
+  transition: all 150ms;
+  box-shadow: 2px 2px 0px 0px rgb(13, 13, 13);
+}
+
+.btn-secondary:hover:not(:disabled) {
+  box-shadow: 4px 4px 0px 0px rgb(13, 13, 13);
+  transform: translate(-1px, -1px);
+}
+
+/* Input field */
+.input-field {
+  background-color: #ffffff;
+  border: 2px solid #0d0d0d;
+  padding: 0.75rem 1rem;
+  color: #0d0d0d;
+  width: 100%;
+  font-family: 'Space Mono', monospace;
+  transition: all 150ms;
+}
+
+.input-field:focus {
+  outline: none;
+  box-shadow: 0px 0px 0px 2px rgb(13, 13, 13);
+}
+
+/* Table styles */
+.arena-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.arena-table th {
+  background-color: #ffffff;
+  color: var(--text-tertiary);
+  font-weight: 600;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding: 12px 16px;
+  text-align: left;
+  border-bottom: 2px solid #0d0d0d;
+  font-family: 'Space Mono', monospace;
+}
+
+.arena-table td {
+  padding: 12px 16px;
+  border-bottom: 1px solid #e5e5e5;
+  vertical-align: middle;
+}
+
+.arena-table tbody tr {
+  background-color: #ffffff;
+  transition: background-color 0.1s;
+}
+
+.arena-table tbody tr:hover {
+  background-color: #f5f5f5;
+}
+
+/* PnL colors */
+.pnl-positive {
+  color: var(--increase);
+  font-weight: 600;
+}
+
+.pnl-negative {
+  color: var(--decrease);
+  font-weight: 600;
+}
+
+/* Badge */
+.badge {
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border: 1px solid;
+  font-family: 'Space Mono', monospace;
+}
+
+.badge-rank-1 {
+  background-color: rgba(234, 179, 8, 0.1);
+  color: #ca8a04;
+  border-color: #ca8a04;
+}
+
+.badge-rank-2 {
+  background-color: rgba(148, 163, 184, 0.1);
+  color: #64748b;
+  border-color: #64748b;
+}
+
+.badge-rank-3 {
+  background-color: rgba(180, 83, 9, 0.1);
+  color: #b45309;
+  border-color: #b45309;
+}
+
+/* Chart container */
+.chart-container {
+  background-color: #ffffff;
+  border: 2px solid #0d0d0d;
+  box-shadow: 4px 4px 0px 0px rgb(13, 13, 13);
+}
+
+/* Loading spinner */
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.spinner {
+  width: 1.25rem;
+  height: 1.25rem;
+  border: 2px solid #d9d9d9;
+  border-top-color: #0d0d0d;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+/* Modal */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(0, 0, 0, 0.4);
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+.modal-content {
+  background-color: #ffffff;
+  border: 2px solid #0d0d0d;
+  max-width: 28rem;
+  width: 100%;
+  max-height: 90vh;
+  overflow: auto;
+  box-shadow: 8px 8px 0px 0px rgb(13, 13, 13);
+}

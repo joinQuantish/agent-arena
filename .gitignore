@@ -1,0 +1,18 @@
+node_modules
+dist
+.env
+.env.local
+*.log
+.DS_Store
+
+# Prisma
+backend/prisma/*.db
+backend/prisma/*.db-journal
+
+# Build outputs
+frontend/dist
+backend/dist
+
+# IDE
+.vscode
+.idea
