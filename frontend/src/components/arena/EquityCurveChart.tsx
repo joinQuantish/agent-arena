@@ -34,97 +34,88 @@ export function EquityCurveChart({ onAgentClick, selectedAgentId }: EquityCurveC
   const seriesMapRef = useRef<Map<string, { series: ISeriesApi<'Line'>; agent: EquityCurveAgent; color: string }>>(new Map());
   const { equityCurves, loading } = useArenaStore();
   const [hoveredAgent, setHoveredAgent] = useState<string | null>(null);
+  const [chartReady, setChartReady] = useState(false);
 
+  // Create chart and update with data
   useEffect(() => {
-    if (!chartContainerRef.current) return;
+    if (!chartContainerRef.current || equityCurves.length === 0) return;
 
-    const chart = createChart(chartContainerRef.current, {
-      layout: {
-        background: { type: ColorType.Solid, color: '#fafafa' },
-        textColor: '#525252',
-        fontFamily: '"Space Mono", monospace',
-        fontSize: 11,
-      },
-      grid: {
-        vertLines: { color: '#e5e5e5', style: LineStyle.Solid },
-        horzLines: { color: '#e5e5e5', style: LineStyle.Solid },
-      },
-      width: chartContainerRef.current.clientWidth,
-      height: 350,
-      rightPriceScale: {
-        borderColor: '#0d0d0d',
-        borderVisible: true,
-        scaleMargins: { top: 0.1, bottom: 0.1 },
-        autoScale: true,
-      },
-      timeScale: {
-        borderColor: '#0d0d0d',
-        borderVisible: true,
-        timeVisible: true,
-        secondsVisible: false,
-        fixLeftEdge: true,
-        fixRightEdge: true,
-      },
-      crosshair: {
-        mode: CrosshairMode.Normal,
-        vertLine: {
-          color: '#0d0d0d',
-          width: 1,
-          style: LineStyle.Dashed,
-          labelBackgroundColor: '#0d0d0d',
+    // If chart doesn't exist, create it
+    if (!chartRef.current) {
+      const chart = createChart(chartContainerRef.current, {
+        layout: {
+          background: { type: ColorType.Solid, color: '#fafafa' },
+          textColor: '#525252',
+          fontFamily: '"Space Mono", monospace',
+          fontSize: 11,
         },
-        horzLine: {
-          color: '#0d0d0d',
-          width: 1,
-          style: LineStyle.Dashed,
-          labelBackgroundColor: '#0d0d0d',
+        grid: {
+          vertLines: { color: '#e5e5e5', style: LineStyle.Solid },
+          horzLines: { color: '#e5e5e5', style: LineStyle.Solid },
         },
-      },
-      handleScale: {
-        axisPressedMouseMove: true,
-      },
-      handleScroll: {
-        vertTouchDrag: false,
-      },
-    });
-
-    chartRef.current = chart;
-
-    // Handle resize
-    const handleResize = () => {
-      if (chartContainerRef.current) {
-        chart.applyOptions({ width: chartContainerRef.current.clientWidth });
-      }
-    };
-
-    window.addEventListener('resize', handleResize);
-
-    return () => {
-      window.removeEventListener('resize', handleResize);
-      chart.remove();
-    };
-  }, []);
-
-  // Handle legend click
-  const handleLegendClick = useCallback((agent: EquityCurveAgent) => {
-    onAgentClick?.(agent);
-  }, [onAgentClick]);
-
-  // Update series line width based on selection/hover
-  useEffect(() => {
-    seriesMapRef.current.forEach(({ series, agent }) => {
-      const isSelected = selectedAgentId === agent.id;
-      const isHovered = hoveredAgent === agent.id;
-      series.applyOptions({
-        lineWidth: isSelected ? 4 : isHovered ? 3 : 2,
+        width: chartContainerRef.current.clientWidth,
+        height: 350,
+        rightPriceScale: {
+          borderColor: '#0d0d0d',
+          borderVisible: true,
+          scaleMargins: { top: 0.1, bottom: 0.1 },
+          autoScale: true,
+        },
+        timeScale: {
+          borderColor: '#0d0d0d',
+          borderVisible: true,
+          timeVisible: true,
+          secondsVisible: false,
+          fixLeftEdge: true,
+          fixRightEdge: true,
+        },
+        crosshair: {
+          mode: CrosshairMode.Normal,
+          vertLine: {
+            color: '#0d0d0d',
+            width: 1,
+            style: LineStyle.Dashed,
+            labelBackgroundColor: '#0d0d0d',
+          },
+          horzLine: {
+            color: '#0d0d0d',
+            width: 1,
+            style: LineStyle.Dashed,
+            labelBackgroundColor: '#0d0d0d',
+          },
+        },
+        handleScale: {
+          axisPressedMouseMove: true,
+        },
+        handleScroll: {
+          vertTouchDrag: false,
+        },
       });
-    });
-  }, [selectedAgentId, hoveredAgent]);
 
-  // Update chart with data
-  useEffect(() => {
-    if (!chartRef.current || equityCurves.length === 0) return;
+      chartRef.current = chart;
+      setChartReady(true);
 
+      // Handle resize
+      const handleResize = () => {
+        if (chartContainerRef.current && chartRef.current) {
+          chartRef.current.applyOptions({ width: chartContainerRef.current.clientWidth });
+        }
+      };
+
+      window.addEventListener('resize', handleResize);
+
+      // Cleanup function
+      return () => {
+        window.removeEventListener('resize', handleResize);
+        if (chartRef.current) {
+          chartRef.current.remove();
+          chartRef.current = null;
+          setChartReady(false);
+        }
+      };
+    }
+
+    // Chart exists, update data
     // Clear existing series
     seriesMapRef.current.forEach(({ series }) => {
       try {
@@ -152,7 +143,7 @@ export function EquityCurveChart({ onAgentClick, selectedAgentId }: EquityCurveC
         crosshairMarkerBorderColor: '#ffffff',
         crosshairMarkerBorderWidth: 2,
         crosshairMarkerBackgroundColor: color,
-        lastValueVisible: false,
+        lastValueVisible: true,
         priceLineVisible: false,
       });
 
@@ -171,6 +162,23 @@ export function EquityCurveChart({ onAgentClick, selectedAgentId }: EquityCurveC
 
     chartRef.current.timeScale().fitContent();
   }, [equityCurves, selectedAgentId]);
+
+  // Handle legend click
+  const handleLegendClick = useCallback((agent: EquityCurveAgent) => {
+    onAgentClick?.(agent);
+  }, [onAgentClick]);
+
+  // Update series line width based on selection/hover
+  useEffect(() => {
+    if (!chartReady) return;
+    seriesMapRef.current.forEach(({ series, agent }) => {
+      const isSelected = selectedAgentId === agent.id;
+      const isHovered = hoveredAgent === agent.id;
+      series.applyOptions({
+        lineWidth: isSelected ? 4 : isHovered ? 3 : 2,
+      });
+    });
+  }, [selectedAgentId, hoveredAgent, chartReady]);
 
   if (loading) {
     return (
