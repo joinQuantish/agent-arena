@@ -1,5 +1,5 @@
-import { useEffect, useRef } from 'react';
-import { createChart, ColorType, LineStyle } from 'lightweight-charts';
+import { useEffect, useRef, useCallback } from 'react';
+import { createChart, ColorType, LineStyle, ISeriesApi, IChartApi, UTCTimestamp } from 'lightweight-charts';
 import { useArenaStore } from '../../store/arenaStore';
 
 const COLORS = [
@@ -13,9 +13,22 @@ const COLORS = [
   '#84cc16', // lime
 ];
 
-export function EquityCurveChart() {
+// Partial agent from equity curve (doesn't have all fields)
+interface EquityCurveAgent {
+  id: string;
+  name: string;
+  walletAddress: string;
+}
+
+interface EquityCurveChartProps {
+  onAgentClick?: (agent: EquityCurveAgent) => void;
+  selectedAgentId?: string | null;
+}
+
+export function EquityCurveChart({ onAgentClick, selectedAgentId }: EquityCurveChartProps) {
   const chartContainerRef = useRef<HTMLDivElement>(null);
-  const chartRef = useRef<any>(null);
+  const chartRef = useRef<IChartApi | null>(null);
+  const seriesMapRef = useRef<Map<string, { series: ISeriesApi<'Line'>; agent: EquityCurveAgent }>>(new Map());
   const { equityCurves, loading } = useArenaStore();
 
   useEffect(() => {
@@ -74,19 +87,32 @@ export function EquityCurveChart() {
     };
   }, []);
 
+  // Handle legend click
+  const handleLegendClick = useCallback((agent: EquityCurveAgent) => {
+    onAgentClick?.(agent);
+  }, [onAgentClick]);
+
   // Update chart with data
   useEffect(() => {
     if (!chartRef.current || equityCurves.length === 0) return;
 
-    // Remove existing series
-    chartRef.current.timeScale().fitContent();
+    // Clear existing series
+    seriesMapRef.current.forEach(({ series }) => {
+      try {
+        chartRef.current?.removeSeries(series);
+      } catch (e) {
+        // Series may already be removed
+      }
+    });
+    seriesMapRef.current.clear();
 
     // Add series for each agent
     equityCurves.forEach((curve, index) => {
       const color = COLORS[index % COLORS.length];
-      const series = chartRef.current.addLineSeries({
+      const isSelected = selectedAgentId === curve.agent.id;
+      const series = chartRef.current!.addLineSeries({
         color,
-        lineWidth: 2,
+        lineWidth: isSelected ? 4 : 2,
         title: curve.agent.name,
         priceFormat: {
           type: 'custom',
@@ -94,11 +120,17 @@ export function EquityCurveChart() {
         },
       });
 
-      series.setData(curve.data);
+      // Map data to lightweight-charts format with proper time type
+      const chartData = curve.data.map(d => ({
+        time: d.time as UTCTimestamp,
+        value: d.value,
+      }));
+      series.setData(chartData);
+      seriesMapRef.current.set(curve.agent.id, { series, agent: curve.agent });
     });
 
     chartRef.current.timeScale().fitContent();
-  }, [equityCurves]);
+  }, [equityCurves, selectedAgentId]);
 
   if (loading) {
     return (
@@ -128,15 +160,26 @@ export function EquityCurveChart() {
       <div ref={chartContainerRef} />
       {/* Legend */}
       <div className="flex flex-wrap gap-4 mt-4 pt-4 border-t border-qn-gray-200">
-        {equityCurves.map((curve, index) => (
-          <div key={curve.agent.id} className="flex items-center gap-2">
-            <div
-              className="w-3 h-3 border border-qn-black"
-              style={{ backgroundColor: COLORS[index % COLORS.length] }}
-            />
-            <span className="text-sm font-mono">{curve.agent.name}</span>
-          </div>
-        ))}
+        {equityCurves.map((curve, index) => {
+          const isSelected = selectedAgentId === curve.agent.id;
+          return (
+            <button
+              key={curve.agent.id}
+              className={`flex items-center gap-2 px-2 py-1 transition-all ${
+                isSelected
+                  ? 'border-2 border-qn-black bg-qn-gray-100'
+                  : 'border border-transparent hover:border-qn-gray-300'
+              }`}
+              onClick={() => handleLegendClick(curve.agent)}
+            >
+              <div
+                className="w-3 h-3 border border-qn-black"
+                style={{ backgroundColor: COLORS[index % COLORS.length] }}
+              />
+              <span className="text-sm font-mono">{curve.agent.name}</span>
+            </button>
+          );
+        })}
       </div>
     </div>
   );

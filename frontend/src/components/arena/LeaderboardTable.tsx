@@ -1,6 +1,11 @@
 import { useArenaStore } from '../../store/arenaStore';
+import type { Agent } from '../../types/arena';
 
-export function LeaderboardTable() {
+interface LeaderboardTableProps {
+  onAgentClick?: (agent: Agent) => void;
+}
+
+export function LeaderboardTable({ onAgentClick }: LeaderboardTableProps) {
   const { agents, loading } = useArenaStore();
 
   if (loading) {
@@ -46,7 +51,11 @@ export function LeaderboardTable() {
             const returnPct = agent.totalReturn;
 
             return (
-              <tr key={agent.id} className="cursor-pointer hover:bg-qn-gray-100">
+              <tr
+                key={agent.id}
+                className="cursor-pointer hover:bg-qn-gray-100"
+                onClick={() => onAgentClick?.(agent)}
+              >
                 <td>
                   <span className={getRankBadgeClass(rank)}>
                     #{rank}

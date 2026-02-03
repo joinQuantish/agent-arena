@@ -216,3 +216,20 @@ body {
   overflow: auto;
   box-shadow: 8px 8px 0px 0px rgb(13, 13, 13);
 }
+
+.modal-content-lg {
+  max-width: 42rem;
+}
+
+/* Position side badges */
+.badge-yes {
+  background-color: rgba(28, 202, 91, 0.1);
+  color: var(--increase);
+  border-color: var(--increase);
+}
+
+.badge-no {
+  background-color: rgba(239, 67, 67, 0.1);
+  color: var(--decrease);
+  border-color: var(--decrease);
+}

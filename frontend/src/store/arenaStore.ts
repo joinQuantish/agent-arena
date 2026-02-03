@@ -1,30 +1,6 @@
 import { create } from 'zustand';
 import * as api from '../api/arena';
-
-interface Agent {
-  id: string;
-  name: string;
-  walletAddress: string;
-  avatarUrl: string | null;
-  totalPnl: number;
-  totalReturn: number;
-  registeredAt: string;
-  positions?: any[];
-  pnlSnapshots?: any[];
-}
-
-interface EquityCurve {
-  agent: {
-    id: string;
-    name: string;
-    walletAddress: string;
-  };
-  data: Array<{
-    time: number;
-    value: number;
-    equity: number;
-  }>;
-}
+import type { Agent, EquityCurve } from '../types/arena';
 
 interface ArenaState {
   agents: Agent[];

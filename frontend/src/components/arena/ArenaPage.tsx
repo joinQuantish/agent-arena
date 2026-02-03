@@ -1,20 +1,59 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
 import { EquityCurveChart } from './EquityCurveChart';
 import { LeaderboardTable } from './LeaderboardTable';
 import { RegisterModal } from './RegisterModal';
+import { AgentDetailModal } from './AgentDetailModal';
 import { useArenaStore } from '../../store/arenaStore';
+import type { Agent } from '../../types/arena';
+
+// Partial agent type from equity curve (minimal fields)
+interface PartialAgent {
+  id: string;
+  name: string;
+  walletAddress: string;
+}
 
 export function ArenaPage() {
   const { publicKey } = useWallet();
   const {
+    agents,
     showRegisterModal,
     setShowRegisterModal,
     fetchLeaderboard,
     fetchEquityCurves,
     checkRegistration,
   } = useArenaStore();
+
+  const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null);
+
+  // Handler for full agent clicks (from leaderboard)
+  const handleAgentClick = (agent: Agent) => {
+    setSelectedAgent(agent);
+  };
+
+  // Handler for partial agent clicks (from chart legend)
+  const handleChartAgentClick = (partialAgent: PartialAgent) => {
+    // Find full agent from store, or create minimal version
+    const fullAgent = agents.find(a => a.id === partialAgent.id);
+    if (fullAgent) {
+      setSelectedAgent(fullAgent);
+    } else {
+      // Fallback with minimal data - modal will fetch full details
+      setSelectedAgent({
+        ...partialAgent,
+        avatarUrl: null,
+        totalPnl: 0,
+        totalReturn: 0,
+        registeredAt: new Date().toISOString(),
+      });
+    }
+  };
+
+  const handleCloseModal = () => {
+    setSelectedAgent(null);
+  };
 
   useEffect(() => {
     fetchLeaderboard();
@@ -83,7 +122,10 @@ export function ArenaPage() {
                 </button>
               </div>
             </div>
-            <EquityCurveChart />
+            <EquityCurveChart
+              onAgentClick={handleChartAgentClick}
+              selectedAgentId={selectedAgent?.id || null}
+            />
           </div>
         </section>
 
@@ -100,7 +142,7 @@ export function ArenaPage() {
                 <option value="registeredAt">Sort by Newest</option>
               </select>
             </div>
-            <LeaderboardTable />
+            <LeaderboardTable onAgentClick={handleAgentClick} />
           </div>
         </section>
       </main>
@@ -122,6 +164,11 @@ export function ArenaPage() {
 
       {/* Register Modal */}
       {showRegisterModal && <RegisterModal />}
+
+      {/* Agent Detail Modal */}
+      {selectedAgent && (
+        <AgentDetailModal agent={selectedAgent} onClose={handleCloseModal} />
+      )}
     </div>
   );
 }
