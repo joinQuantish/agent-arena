@@ -65,9 +65,12 @@ export function leaderboardRouter(prisma: PrismaClient) {
         limit: parseInt(limit as string),
         offset: parseInt(offset as string),
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error('Leaderboard error:', error);
-      res.status(500).json({ error: 'Failed to get leaderboard' });
+      res.status(500).json({
+        error: 'Failed to get leaderboard',
+        message: error?.message || 'Unknown error'
+      });
     }
   });
 
